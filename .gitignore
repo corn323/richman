@@ -1,0 +1,45 @@
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity generated project files
+*.csproj
+!Richman.Core.Standalone.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# IDE and OS files
+.vs/
+.idea/
+.vscode/
+*.user
+*.userprefs
+*.sln.iml
+.DS_Store
+Thumbs.db
+
+# Build and test output
+TestResults/
+coverage/
+artifacts/
+
+# Local-only environment files
+.env
+.env.*
+!.env.example
