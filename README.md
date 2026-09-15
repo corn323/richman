@@ -14,7 +14,7 @@ Richman 是一款原創的 3D Low-Poly Toy City 地產桌遊。玩家在一座�
 - 四人同機熱座遊玩，包含逐格移動、骰子動畫、所有權標記、建築等級變化、收租與勝利結果。
 - 遊戲內語言切換：繁中、English、日本語。
 
-尚未開始的內容：Bot、Steam、Networking、交易、事件卡與大量模擬。這些屬於後續 Milestone。
+目前已加入純 C# `IBotStrategy`、`SimpleBotStrategy` 與 headless simulation，可在不啟動 Unity、Scene 或 Steam 的情況下執行四 Bot 對局。Steam、Networking、交易與事件卡仍屬後續工作。
 
 ## 開始遊玩
 
@@ -54,6 +54,14 @@ Core 測試位於 Assets/Scripts/Core/Tests，可在 Unity Test Runner 執行 Ed
 - Richman > Build Windows Playtest
 
 Windows Build Support (IL2CPP) 可用於建立 Windows x64 測試版。Library、Temp、Logs 與 Build cache 不應提交到 Git。
+
+執行四 Bot 模擬（不需要 Unity）：
+
+```text
+dotnet run --project Tools/Simulation/Richman.Simulation.csproj -- 1000
+```
+
+模擬器會輸出 `SimulationResults.csv`，並在所有對局完成時以 exit code 0 結束。
 
 ## 美術方向
 

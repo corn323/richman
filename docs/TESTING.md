@@ -23,6 +23,16 @@ dotnet build Richman.Core.Standalone.csproj
 
 此專案只編譯 `Assets/Scripts/Core/Runtime`，用來確認核心沒有 Unity 依賴。Unity Test Framework 的 NUnit 執行仍以 Unity Test Runner 為準。
 
+## M2 Bot Simulation
+
+`SimpleBotStrategy` 使用與真人相同的 `GameCommand` API，不直接修改 `GameState`。可在沒有 Unity、圖形或 Steam 的環境執行：
+
+```text
+dotnet run --project Tools/Simulation/Richman.Simulation.csproj -- 1000
+```
+
+模擬器會寫出每局 seed、回合數、勝利者與完成狀態的 `SimulationResults.csv`。預設每局最多 20,000 個 command；任何 Bot 被 Core 拒絕的 command 都會讓模擬器失敗，避免把規則錯誤隱藏起來。
+
 ## Local Playtest
 
 先在 Unity Hub 登入並啟用 Personal license，接著在 Unity Editor 執行 `Richman > Generate M1.5 Gameplay Scene` 生成 `Assets/Scenes/Gameplay.unity`；再執行 `Richman > Build Windows Playtest` 產生 `Builds/Windows/Richman.exe`。這是 M1.5 四人熱座 3D Vertical Slice：Scene 直接包含 36 格棋盤、Miniature City、Pawn、Dice、Lighting、Camera Rig 與 UI Toolkit HUD。

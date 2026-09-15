@@ -1,0 +1,35 @@
+; Richman Godot .NET migration project.
+; Open this folder with the .NET edition of Godot 4.
+config_version=5
+
+[application]
+
+config/name="Richman"
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+run/main_scene="res://Scenes/Main.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.055, 0.075, 0.12, 1)
+
+[input]
+
+focus_current_player={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":70)]
+}
+
+overview_camera={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194309)]
+}

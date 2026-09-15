@@ -8,6 +8,8 @@
 [Uu]ser[Ss]ettings/
 [Mm]emoryCaptures/
 [Rr]ecordings/
+.godot/
+GodotProject/export_templates/
 
 # Unity generated project files
 *.csproj
@@ -38,6 +40,7 @@ Thumbs.db
 TestResults/
 coverage/
 artifacts/
+SimulationResults.csv
 
 # Local-only environment files
 .env
