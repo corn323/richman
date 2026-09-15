@@ -1,0 +1,34 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="Root" class="root">
+        <ui:VisualElement name="MainPanel" class="panel left-panel">
+            <ui:Label name="Title" text="RICHMAN" class="title" />
+            <ui:Label name="Subtitle" text="STYLIZED TOY CITY  |  LOCAL PLAYTEST" class="subtitle" />
+            <ui:Label name="CurrentPlayer" text="CURRENT PLAYER" class="current-player" />
+            <ui:Label name="Turn" text="TURN 1" class="turn" />
+            <ui:Label name="Money" text="CASH  $1500" class="money" />
+            <ui:Label name="DiceResult" text="DICE  --" class="dice" />
+            <ui:Label name="Message" text="Welcome to Richman." class="message" />
+            <ui:Label text="PLAYERS" class="section-label players-label" />
+            <ui:Label name="PlayerList" text="P1  $1500  Tile 0&#10;P2  $1500  Tile 0&#10;P3  $1500  Tile 0&#10;P4  $1500  Tile 0" class="player-list" />
+            <ui:Label name="OwnedProperties" text="OWNED PROPERTIES&#10;None yet" class="owned-properties" />
+            <ui:Label name="CurrentTile" text="CURRENT TILE&#10;Central Station" class="current-tile" />
+            <ui:VisualElement class="button-row row-one">
+                <ui:Button name="RollButton" text="ROLL DICE" class="action-button" />
+                <ui:Button name="BuyButton" text="BUY" class="action-button" />
+            </ui:VisualElement>
+            <ui:VisualElement class="button-row row-two">
+                <ui:Button name="UpgradeButton" text="UPGRADE" class="action-button" />
+                <ui:Button name="EndTurnButton" text="END TURN" class="action-button" />
+            </ui:VisualElement>
+            <ui:Button name="NewGameButton" text="NEW GAME" class="new-game-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="PropertyPanel" class="panel property-panel">
+            <ui:Label text="PROPERTY" class="property-header" />
+            <ui:Label name="PropertyName" text="Property" class="property-name" />
+            <ui:Label name="PropertyDistrict" text="District" class="property-line" />
+            <ui:Label name="PropertyPrice" text="Price" class="property-line" />
+            <ui:Label name="PropertyRent" text="Rent" class="property-line" />
+            <ui:Label name="PropertyUpgradeCost" text="Upgrade" class="property-line" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

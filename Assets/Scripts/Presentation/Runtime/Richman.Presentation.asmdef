@@ -1,9 +1,8 @@
 {
-  "name": "Richman.Playtest",
-  "rootNamespace": "Richman.Playtest",
+  "name": "Richman.Presentation",
+  "rootNamespace": "Richman.Presentation",
   "references": [
-    "Richman.Core",
-    "Richman.Presentation"
+    "Richman.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

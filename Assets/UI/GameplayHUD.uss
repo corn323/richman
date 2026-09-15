@@ -1,0 +1,168 @@
+.root {
+    flex-grow: 1;
+    color: rgb(235, 242, 255);
+    font-size: 14px;
+}
+
+.panel {
+    background-color: rgba(7, 15, 35, 0.94);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(100, 154, 220, 0.55);
+    border-right-color: rgba(100, 154, 220, 0.55);
+    border-top-color: rgba(100, 154, 220, 0.55);
+    border-bottom-color: rgba(100, 154, 220, 0.55);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+.left-panel {
+    position: absolute;
+    left: 18px;
+    top: 18px;
+    bottom: 18px;
+    width: 410px;
+}
+
+.property-panel {
+    position: absolute;
+    right: 18px;
+    top: 55%;
+    width: 330px;
+    min-height: 250px;
+}
+
+.title {
+    height: 42px;
+    color: rgb(255, 255, 255);
+    font-size: 30px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.subtitle {
+    height: 22px;
+    color: rgb(142, 173, 220);
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
+.current-player {
+    height: 45px;
+    margin-top: 12px;
+    color: rgb(255, 211, 92);
+    font-size: 20px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.turn, .money, .dice {
+    height: 28px;
+    font-size: 15px;
+    -unity-font-style: bold;
+}
+
+.money {
+    color: rgb(150, 235, 173);
+}
+
+.dice {
+    color: rgb(156, 213, 255);
+}
+
+.message {
+    height: 52px;
+    margin-top: 5px;
+    color: rgb(211, 222, 240);
+    white-space: normal;
+}
+
+.section-label {
+    height: 22px;
+    margin-top: 4px;
+    color: rgb(130, 184, 255);
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.player-list {
+    height: 96px;
+    color: rgb(240, 245, 255);
+    white-space: normal;
+}
+
+.owned-properties {
+    height: 92px;
+    margin-top: 7px;
+    color: rgb(220, 232, 249);
+    white-space: normal;
+}
+
+.current-tile {
+    height: 54px;
+    color: rgb(180, 219, 255);
+    white-space: normal;
+}
+
+.button-row {
+    flex-direction: row;
+    height: 43px;
+    margin-top: 6px;
+}
+
+.action-button, .new-game-button {
+    height: 40px;
+    flex-grow: 1;
+    margin-left: 4px;
+    margin-right: 4px;
+    background-color: rgb(35, 91, 162);
+    border-left-color: rgba(159, 212, 255, 0.75);
+    border-right-color: rgba(159, 212, 255, 0.75);
+    border-top-color: rgba(159, 212, 255, 0.75);
+    border-bottom-color: rgba(159, 212, 255, 0.75);
+    color: white;
+    -unity-font-style: bold;
+}
+
+.action-button:hover, .new-game-button:hover {
+    background-color: rgb(61, 126, 204);
+}
+
+.action-button:disabled, .new-game-button:disabled {
+    background-color: rgba(70, 78, 96, 0.75);
+    color: rgba(220, 225, 235, 0.55);
+}
+
+.new-game-button {
+    margin-top: 5px;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.property-header {
+    height: 30px;
+    color: rgb(255, 211, 92);
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.property-name {
+    height: 34px;
+    color: white;
+    font-size: 18px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.property-line {
+    height: 28px;
+    color: rgb(221, 232, 250);
+}

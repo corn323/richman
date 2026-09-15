@@ -43,3 +43,6 @@ artifacts/
 .env
 .env.*
 !.env.example
+
+# Local development brief; keep out of repository history.
+GOAL.md

@@ -37,11 +37,34 @@ Presentation、Steam 與 Networking 只能在後續階段接到 `GameSession` �
 
 這些是 M1 的最小可測規則，不是完整產品規則；事件、交易、抵押、斷線同步與 Host-authority 留在後續 milestone。
 
+## M1.5 Presentation
+
+M1.5 將 Unity 呈現與 `Richman.Core` 分開。`GameSession` 仍是唯一規則入口；Scene、Prefab、UI Toolkit、Camera 與動畫只讀取 `GameState` 並送出 `GameCommand`。
+
+```text
+Gameplay.unity
+  GameController (PlaytestGame)
+      -> GameSession (Richman.Core)
+      -> BoardView -> BoardTileView -> PropertyView / BuildingSlot
+      -> PawnView / DiceView
+      -> GameplayHUD (UI Toolkit)
+      -> CameraRig
+```
+
+`Assets/Prefabs` 內的 BoardTile、Property、Pawn、Dice、MiniatureCity、Ground、CameraRig 與 GameplayHUD 是可替換的 asset boundary。Scene 直接保存 36 個 Tile instance、Property instance、4 個 Pawn instance 與 Dice instance；執行時只綁定它們，不以 `PlaytestGame.cs` 動態生成整張地圖。
+
+Pawn 的 authoritative 位置仍是 Core 的 `PlayerState.CurrentTileIndex`。`BoardView` 只將 TileIndex 轉成 Scene 中 Tile instance 的位置並播放逐格動畫。Dice 的結果來自 Core，`DiceView` 只負責旋轉、彈跳與結果呈現。
+
+正式 Gameplay UI 使用 UI Toolkit，不使用 `OnGUI()`。`GameplayHUD` 的按鈕依 `GameState.Phase`、`PendingAction` 與 `Outcome` 更新 enabled 狀態；Property Panel 只呈現目前 Tile 的資料。
+
 ## 目錄
 
 ```text
 Assets/Scripts/Core/Runtime/  純 C# 核心與 Richman.Core.asmdef
 Assets/Scripts/Core/Tests/    Unity EditMode/NUnit tests
+Assets/Scripts/Presentation/Runtime/  Scene-bound 3D views、Camera 與 UI Toolkit HUD
+Assets/Scripts/Playtest/      M1.5 controller；只組合 Core 與 Presentation
+Assets/Prefabs/               可替換的棋盤、地產、角色、骰子、城市與 UI Prefab
 Packages/                     Unity package manifest
 ProjectSettings/              Unity project metadata
 docs/                         開發文件

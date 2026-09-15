@@ -8,9 +8,10 @@ namespace Richman.Editor
 {
     public static class BuildProject
     {
-        private const string ScenePath = "Assets/Scenes/Playtest.unity";
+        private const string ScenePath = "Assets/Scenes/Gameplay.unity";
         private const string OutputPath = "Builds/Windows/Richman.exe";
 
+        [MenuItem("Richman/Build Windows Playtest")]
         public static void BuildWindows()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(OutputPath));
