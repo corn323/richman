@@ -33,6 +33,17 @@ dotnet run --project Tools/Simulation/Richman.Simulation.csproj -- 1000
 
 模擬器會寫出每局 seed、回合數、勝利者與完成狀態的 `SimulationResults.csv`。預設每局最多 20,000 個 command；任何 Bot 被 Core 拒絕的 command 都會讓模擬器失敗，避免把規則錯誤隱藏起來。
 
+## Godot Port Smoke Test
+
+使用 Godot 4.7.2 `.NET / Mono` 與 .NET SDK 執行：
+
+```text
+dotnet build GodotProject/Richman.Godot.csproj --no-restore
+Godot --headless --path GodotProject --quit-after 3
+```
+
+目前 smoke test 已驗證 C# project build 與 Main Scene 啟動；正式 Windows/Linux/macOS export 仍需在 Godot 內安裝 Export Templates 後執行。
+
 ## Local Playtest
 
 先在 Unity Hub 登入並啟用 Personal license，接著在 Unity Editor 執行 `Richman > Generate M1.5 Gameplay Scene` 生成 `Assets/Scenes/Gameplay.unity`；再執行 `Richman > Build Windows Playtest` 產生 `Builds/Windows/Richman.exe`。這是 M1.5 四人熱座 3D Vertical Slice：Scene 直接包含 36 格棋盤、Miniature City、Pawn、Dice、Lighting、Camera Rig 與 UI Toolkit HUD。

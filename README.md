@@ -6,17 +6,24 @@ Richman 是一款原創的 3D Low-Poly Toy City 地產桌遊。玩家在一座�
 
 ## 目前版本
 
-目前完成 M0、M1 與 M1.5 Playable 3D Vertical Slice：
+目前完成 M0、M1、M1.5 Unity 參考版本，並開始 Godot 4.7.2 .NET 跨平台移植：
 
 - 純 C# Richman.Core：棋盤、玩家、回合、骰子、金錢、地產、租金、升級、破產與勝利。
 - 36 格原創棋盤，資料由 PrototypeBoardFactory 建立，規則不依賴 Scene。
 - 可編輯的 3D Gameplay Scene、Tile、Property、Pawn、Dice、Miniature City、Camera Rig 與 UI Toolkit HUD。
 - 四人同機熱座遊玩，包含逐格移動、骰子動畫、所有權標記、建築等級變化、收租與勝利結果。
 - 遊戲內語言切換：繁中、English、日本語。
+- `GodotProject` 已有可編譯的 Godot C# 3D Board、雙骰子、Pawn、Camera 與 HUD vertical slice。
 
 目前已加入純 C# `IBotStrategy`、`SimpleBotStrategy` 與 headless simulation，可在不啟動 Unity、Scene 或 Steam 的情況下執行四 Bot 對局。Steam、Networking、交易與事件卡仍屬後續工作。
 
 ## 開始遊玩
+
+### Godot 版本（目前移植入口）
+
+使用 Godot 4.7.2 `.NET / Mono` 開啟 `GodotProject`，按 Play 執行 `Scenes/Main.tscn`。需要 .NET SDK 與 Godot Export Templates。
+
+### Unity 參考版本
 
 使用 Unity 6.3 LTS 6000.3.24f1 開啟專案後：
 
