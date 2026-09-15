@@ -1,8 +1,14 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!104 &1
+--- !u!1045 &1
 EditorBuildSettings:
-  serializedVersion: 2
   m_ObjectHideFlags: 0
-  m_Scenes: []
+  serializedVersion: 2
+  m_Scenes:
+  - serializedVersion: 2
+    scenePath: Assets/Scenes/Playtest.unity
+    guid: 5cdb4fa5f1b648b8a0c9e8e7b6a5d4c3
+    m_buildIndex: 0
+    m_enabled: 1
   m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

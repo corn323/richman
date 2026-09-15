@@ -1,8 +1,8 @@
 # M0/M1 測試
 
-## Unity EditMode
+## Unity EditMode（可選）
 
-開啟 Unity 6.3 LTS 後，在 `Window > General > Test Runner` 選擇 EditMode，執行 `Richman.Core.Tests`。測試不建立 Scene、不啟動 Steam，也不需要圖形或網路。
+若專案已安裝 Unity Test Framework，先在 Player Settings 的 Scripting Define Symbols 加入 `RICHMAN_ENABLE_UNITY_TESTS`，再開啟 Unity 6.3 LTS，在 `Window > General > Test Runner` 選擇 EditMode，執行 `Richman.Core.Tests`。測試不建立 Scene、不啟動 Steam，也不需要圖形或網路；未啟用此符號時不會阻塞一般遊戲建置。
 
 目前測試涵蓋：
 
@@ -23,6 +23,10 @@ dotnet build Richman.Core.Standalone.csproj
 
 此專案只編譯 `Assets/Scripts/Core/Runtime`，用來確認核心沒有 Unity 依賴。Unity Test Framework 的 NUnit 執行仍以 Unity Test Runner 為準。
 
+## Local Playtest
+
+開啟 `Assets/Scenes/Playtest.unity`，或執行 `Builds/Windows/Richman.exe`。這是四人熱座 3D 驗證版：畫面會建立低多邊形棋盤、彩色人物棋子與升級建築；玩家依序操作 Roll Dice、Buy Property、Upgrade、End Turn，可看到棋子移動、資金、位置、產權與勝者。
+
 ## 尚未驗證的範圍
 
-M2 之後的 Bot、Headless 1000 局模擬、Unity Build、3D、Steam、Networking 與真實多人流程尚未建立，因此不在 M0/M1 測試結果內。
+ Bot、Headless 1000 局模擬、Steam、Networking 與真實線上多人流程尚未建立。Windows 測試請整個複製 `Builds/Windows` 資料夾，不要只複製單一 `.exe`；本機 Player 已完成啟動煙霧測試。

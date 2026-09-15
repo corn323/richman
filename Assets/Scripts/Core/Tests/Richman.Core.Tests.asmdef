@@ -2,9 +2,7 @@
   "name": "Richman.Core.Tests",
   "rootNamespace": "Richman.Core.Tests",
   "references": [
-    "Richman.Core",
-    "UnityEngine.TestRunner",
-    "UnityEditor.TestRunner"
+    "Richman.Core"
   ],
   "includePlatforms": [
     "Editor"
@@ -16,10 +14,10 @@
     "nunit.framework.dll"
   ],
   "autoReferenced": false,
-  "defineConstraints": [],
+  "defineConstraints": [
+    "RICHMAN_ENABLE_UNITY_TESTS"
+  ],
   "versionDefines": [],
   "noEngineReferences": true,
-  "optionalUnityReferences": [
-    "TestAssemblies"
-  ]
+  "optionalUnityReferences": []
 }
