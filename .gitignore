@@ -41,6 +41,8 @@ TestResults/
 coverage/
 artifacts/
 SimulationResults.csv
+**/bin/
+**/obj/
 
 # Local-only environment files
 .env
