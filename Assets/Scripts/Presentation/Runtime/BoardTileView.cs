@@ -43,7 +43,7 @@ namespace Richman.Presentation
         public void Configure(BoardTileDefinition definition)
         {
             BoardIndex = definition.PositionIndex;
-            if (label != null) label.text = definition.PositionIndex + "\n" + ShortName(definition.DisplayName);
+            if (label != null) label.text = definition.PositionIndex + "\n" + ShortName(RichmanLocalization.TileName(definition));
         }
 
         public void ApplyState(GameState state)
@@ -58,7 +58,7 @@ namespace Richman.Presentation
 
             if (label != null)
             {
-                var text = definition.PositionIndex + "\n" + ShortName(definition.DisplayName);
+                var text = definition.PositionIndex + "\n" + ShortName(RichmanLocalization.TileName(definition));
                 if (property != null && property.OwnerId.HasValue)
                 {
                     text += "\nP" + property.OwnerId.Value + " L" + property.UpgradeLevel;
@@ -82,7 +82,7 @@ namespace Richman.Presentation
 
         private static string ShortName(string displayName)
         {
-            if (string.IsNullOrEmpty(displayName)) return "Tile";
+            if (string.IsNullOrEmpty(displayName)) return RichmanLocalization.Text("tile.unknown");
             return displayName.Length <= 12 ? displayName : displayName.Substring(0, 12);
         }
     }

@@ -20,32 +20,53 @@ namespace Richman.Editor
         [MenuItem("Richman/Generate M1.5 Gameplay Scene")]
         public static void Generate()
         {
-            EnsureFolders();
-            var materials = CreateMaterials();
-            var tilePrefab = CreateBoardTilePrefab(materials.Tile);
-            var propertyPrefab = CreatePropertyPrefab(materials.Toy, materials.Dark);
-            var pawnPrefab = CreatePawnPrefab(materials.Toy, materials.Dark, materials.Skin);
-            var dicePrefab = CreateDicePrefab(materials.Toy, materials.Dark);
-            var cityPrefab = CreateCityPrefab(materials.Toy, materials.Dark, materials.Green);
-            var groundPrefab = CreateGroundPrefab(materials.Ground);
-            var cameraPrefab = CreateCameraPrefab();
-            var hudPrefab = CreateHudPrefab();
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            try
+            {
+                EnsureFolders();
+                var materials = CreateMaterials();
+                var tilePrefab = CreateBoardTilePrefab(materials.Tile);
+                var propertyPrefab = CreatePropertyPrefab(materials.Toy, materials.Dark);
+                var pawnPrefab = CreatePawnPrefab(materials.Toy, materials.Dark, materials.Skin);
+                var dicePrefab = CreateDicePrefab(materials.Toy, materials.Dark);
+                var cityPrefab = CreateCityPrefab(materials.Toy, materials.Dark, materials.Green);
+                var groundPrefab = CreateGroundPrefab(materials.Ground);
+                var cameraPrefab = CreateCameraPrefab();
+                var hudPrefab = CreateHudPrefab();
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
-            CreateGameplayScene(
-                tilePrefab,
-                propertyPrefab,
-                pawnPrefab,
-                dicePrefab,
-                cityPrefab,
-                groundPrefab,
-                cameraPrefab,
-                hudPrefab);
+                tilePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Board/BoardTile.prefab").GetComponent<BoardTileView>();
+                propertyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Board/Property.prefab").GetComponent<PropertyView>();
+                pawnPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Characters/Pawn.prefab").GetComponent<PawnView>();
+                dicePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Props/Dice.prefab").GetComponent<DiceView>();
+                cityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/MiniatureCity.prefab");
+                groundPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/Ground.prefab");
+                cameraPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/CameraRig.prefab");
+                hudPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/UI/GameplayHUD.prefab");
 
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            Debug.Log("Richman M1.5 Gameplay Scene and replaceable prefabs generated.");
+                CreateGameplayScene(
+                    tilePrefab,
+                    propertyPrefab,
+                    pawnPrefab,
+                    dicePrefab,
+                    cityPrefab,
+                    groundPrefab,
+                    cameraPrefab,
+                    hudPrefab);
+
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                Debug.Log("Richman M1.5 Gameplay Scene and replaceable prefabs generated.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                if (Application.isBatchMode) throw;
+                EditorUtility.DisplayDialog(
+                    "Richman M1.5 Generation Failed",
+                    exception.Message + "\n\nOpen the Console for the full stack trace.",
+                    "OK");
+            }
         }
 
         private static void EnsureFolders()
@@ -79,8 +100,14 @@ namespace Richman.Editor
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                var shader = Shader.Find(shaderName);
-                if (shader == null) shader = Shader.Find("Standard");
+                var shader = FindPresentationShader(shaderName);
+                if (shader == null)
+                {
+                    throw new InvalidOperationException(
+                        "Richman M1.5 could not find a usable presentation shader. " +
+                        "Enable the built-in rendering modules and reimport the project.");
+                }
+
                 material = new Material(shader);
                 AssetDatabase.CreateAsset(material, path);
             }
@@ -90,6 +117,23 @@ namespace Richman.Editor
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        private static Shader FindPresentationShader(string preferredName)
+        {
+            var shader = Shader.Find(preferredName);
+            if (shader != null) return shader;
+
+            shader = Shader.Find("Standard");
+            if (shader != null) return shader;
+
+            shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader != null) return shader;
+
+            shader = Shader.Find("Unlit/Color");
+            if (shader != null) return shader;
+
+            return Shader.Find("Sprites/Default");
         }
 
         private static BoardTileView CreateBoardTilePrefab(Material tileMaterial)
@@ -272,6 +316,14 @@ namespace Richman.Editor
             GameObject hudPrefab)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            tilePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Board/BoardTile.prefab").GetComponent<BoardTileView>();
+            propertyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Board/Property.prefab").GetComponent<PropertyView>();
+            pawnPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Characters/Pawn.prefab").GetComponent<PawnView>();
+            dicePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Props/Dice.prefab").GetComponent<DiceView>();
+            cityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/MiniatureCity.prefab");
+            groundPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/Ground.prefab");
+            cameraPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/Environment/CameraRig.prefab");
+            hudPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath + "/UI/GameplayHUD.prefab");
             var sceneRoot = new GameObject("GameplayScene");
             var boardObject = new GameObject("BoardRoot");
             boardObject.transform.SetParent(sceneRoot.transform, false);
@@ -404,7 +456,7 @@ namespace Richman.Editor
             objectToCreate.transform.localPosition = localPosition;
             objectToCreate.transform.localRotation = localRotation;
             var text = objectToCreate.AddComponent<TextMesh>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.text = value;
             text.fontSize = fontSize;
             text.characterSize = characterSize;

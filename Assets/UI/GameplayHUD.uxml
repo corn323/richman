@@ -8,7 +8,7 @@
             <ui:Label name="Money" text="CASH  $1500" class="money" />
             <ui:Label name="DiceResult" text="DICE  --" class="dice" />
             <ui:Label name="Message" text="Welcome to Richman." class="message" />
-            <ui:Label text="PLAYERS" class="section-label players-label" />
+            <ui:Label name="PlayersLabel" text="PLAYERS" class="section-label players-label" />
             <ui:Label name="PlayerList" text="P1  $1500  Tile 0&#10;P2  $1500  Tile 0&#10;P3  $1500  Tile 0&#10;P4  $1500  Tile 0" class="player-list" />
             <ui:Label name="OwnedProperties" text="OWNED PROPERTIES&#10;None yet" class="owned-properties" />
             <ui:Label name="CurrentTile" text="CURRENT TILE&#10;Central Station" class="current-tile" />
@@ -21,9 +21,15 @@
                 <ui:Button name="EndTurnButton" text="END TURN" class="action-button" />
             </ui:VisualElement>
             <ui:Button name="NewGameButton" text="NEW GAME" class="new-game-button" />
+            <ui:VisualElement class="language-row">
+                <ui:Label text="LANGUAGE" class="language-label" />
+                <ui:Button name="LanguageZh" text="繁中" class="language-button" />
+                <ui:Button name="LanguageEn" text="English" class="language-button" />
+                <ui:Button name="LanguageJa" text="日本語" class="language-button" />
+            </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement name="PropertyPanel" class="panel property-panel">
-            <ui:Label text="PROPERTY" class="property-header" />
+            <ui:Label name="PropertyHeader" text="PROPERTY" class="property-header" />
             <ui:Label name="PropertyName" text="Property" class="property-name" />
             <ui:Label name="PropertyDistrict" text="District" class="property-line" />
             <ui:Label name="PropertyPrice" text="Price" class="property-line" />

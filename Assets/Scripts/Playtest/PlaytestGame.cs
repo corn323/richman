@@ -44,12 +44,12 @@ namespace Richman.Playtest
             _presentationBusy = false;
             var actualSeed = seed == 0 ? Environment.TickCount : seed;
             _session = PrototypeGameFactory.CreateFourPlayerSession(actualSeed);
-            _message = "Welcome to Richman. Player 1, roll the dice.";
+            _message = RichmanLocalization.Text("welcome");
 
             if (boardView != null) boardView.Bind(_session);
             if (gameplayHud != null)
             {
-                gameplayHud.BindActions(RollDice, BuyProperty, UpgradeProperty, EndTurn, StartNewGame);
+                gameplayHud.BindActions(RollDice, BuyProperty, UpgradeProperty, EndTurn, StartNewGame, SetLanguage);
                 gameplayHud.Render(_session.State, _message, false);
             }
 
@@ -64,11 +64,11 @@ namespace Richman.Playtest
             var result = _session.Execute(new RollDiceCommand(current.Id));
             if (!result.Succeeded)
             {
-                ShowError(result.ErrorMessage);
+                ShowError(RichmanLocalization.CommandError(result.ErrorCode, result.ErrorMessage));
                 return;
             }
 
-            _message = "P" + current.Id + " rolled " + result.DiceResult.Total + ".";
+            _message = RichmanLocalization.Format("rolled", current.Id, result.DiceResult.Total);
             _presentationBusy = true;
             if (boardView != null) boardView.RefreshVisuals();
             RenderHud();
@@ -94,12 +94,12 @@ namespace Richman.Playtest
 
         private void BuyProperty()
         {
-            ExecuteSimple(new BuyPropertyCommand(_session.State.CurrentPlayerId), "Property purchased. Your ownership marker is on the tile.");
+            ExecuteSimple(new BuyPropertyCommand(_session.State.CurrentPlayerId), RichmanLocalization.Text("purchased"));
         }
 
         private void UpgradeProperty()
         {
-            ExecuteSimple(new UpgradePropertyCommand(_session.State.CurrentPlayerId), "Property upgraded. The building changed level.");
+            ExecuteSimple(new UpgradePropertyCommand(_session.State.CurrentPlayerId), RichmanLocalization.Text("upgraded"));
         }
 
         private void EndTurn()
@@ -118,12 +118,12 @@ namespace Richman.Playtest
             var result = _session.Execute(command);
             if (!result.Succeeded)
             {
-                ShowError(result.ErrorMessage);
+                ShowError(RichmanLocalization.CommandError(result.ErrorCode, result.ErrorMessage));
                 return;
             }
 
             _message = _session.State.Phase == TurnPhase.Finished
-                ? "Game finished. Winner: P" + _session.State.Outcome.WinnerId + "."
+                ? RichmanLocalization.Format("finished", _session.State.Outcome.WinnerId)
                 : successMessage;
             if (boardView != null) boardView.RefreshVisuals();
             RenderHud();
@@ -140,17 +140,23 @@ namespace Richman.Playtest
             var tile = _session.State.Board.GetTileAt(player.CurrentTileIndex);
             if (_session.State.Phase == TurnPhase.Finished)
             {
-                return "P" + playerId + " landed on " + tile.DisplayName + ". Winner: P" + _session.State.Outcome.WinnerId + ".";
+                return RichmanLocalization.Format("landed-winner", playerId, RichmanLocalization.TileName(tile), _session.State.Outcome.WinnerId);
             }
 
-            if (_session.State.PendingAction == PendingAction.BuyProperty) return "Choose Buy or End Turn for " + tile.DisplayName + ".";
-            if (_session.State.PendingAction == PendingAction.UpgradeProperty) return "Choose Upgrade or End Turn for " + tile.DisplayName + ".";
-            return "P" + playerId + " landed on " + tile.DisplayName + ".";
+            if (_session.State.PendingAction == PendingAction.BuyProperty) return RichmanLocalization.Format("landed-buy", RichmanLocalization.TileName(tile));
+            if (_session.State.PendingAction == PendingAction.UpgradeProperty) return RichmanLocalization.Format("landed-upgrade", RichmanLocalization.TileName(tile));
+            return RichmanLocalization.Format("landed", playerId, RichmanLocalization.TileName(tile));
         }
 
         private void ShowError(string error)
         {
-            _message = "Action unavailable: " + error;
+            _message = RichmanLocalization.Format("action-unavailable", error);
+            RenderHud();
+        }
+
+        private void SetLanguage(RichmanLanguage language)
+        {
+            RichmanLocalization.SetLanguage(language);
             RenderHud();
         }
 
