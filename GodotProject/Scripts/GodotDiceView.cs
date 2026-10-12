@@ -84,10 +84,10 @@ namespace Richman.GodotPresentation
         {
             switch (value)
             {
-                case 2: return new Vector3(-90f, 0f, 0f);
+                case 2: return new Vector3(90f, 0f, 0f);
                 case 3: return new Vector3(0f, 0f, 90f);
                 case 4: return new Vector3(0f, 0f, -90f);
-                case 5: return new Vector3(90f, 0f, 0f);
+                case 5: return new Vector3(-90f, 0f, 0f);
                 case 6: return new Vector3(180f, 0f, 0f);
                 default: return Vector3.Zero;
             }

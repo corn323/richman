@@ -22,12 +22,13 @@ namespace Richman.GodotPresentation
 
         public Vector3 GetTilePosition(int tileIndex)
         {
-            var side = 10;
+            var side = 9;
             var spacing = 1.35f;
-            if (tileIndex < side) return new Vector3(-6.1f + tileIndex * spacing, 0.35f, -6.1f);
-            if (tileIndex < side * 2 - 1) return new Vector3(6.1f, 0.35f, -6.1f + (tileIndex - side) * spacing);
-            if (tileIndex < side * 3 - 2) return new Vector3(6.1f - (tileIndex - (side * 2 - 1)) * spacing, 0.35f, 6.1f);
-            return new Vector3(-6.1f, 0.35f, 6.1f - (tileIndex - (side * 3 - 2)) * spacing);
+            var half = side * spacing * 0.5f;
+            if (tileIndex < side) return new Vector3(-half + tileIndex * spacing, 0.35f, -half);
+            if (tileIndex < side * 2) return new Vector3(half, 0.35f, -half + (tileIndex - side) * spacing);
+            if (tileIndex < side * 3) return new Vector3(half - (tileIndex - side * 2) * spacing, 0.35f, half);
+            return new Vector3(-half, 0.35f, half - (tileIndex - side * 3) * spacing);
         }
 
         public Node3D GetPawn(int playerId)

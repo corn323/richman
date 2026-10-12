@@ -51,7 +51,7 @@ namespace Richman.GodotPresentation
         private void UpdateCamera()
         {
             if (_camera == null) return;
-            var rotation = new Basis(Vector3.Up, Mathf.DegToRad(_yaw)) * new Basis(Vector3.Right, Mathf.DegToRad(_pitch));
+            var rotation = new Basis(Vector3.Up, Mathf.DegToRad(_yaw)) * new Basis(Vector3.Right, Mathf.DegToRad(-_pitch));
             var desired = _focusPoint + rotation * new Vector3(0f, 0f, _distance);
             _camera.GlobalPosition = _camera.GlobalPosition.Lerp(desired, 0.12f);
             _camera.LookAt(_focusPoint, Vector3.Up);
