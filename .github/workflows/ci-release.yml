@@ -110,7 +110,7 @@ jobs:
           $outputDirectory = Join-Path $projectPath "build\Richman-Windows-x64"
           $gameExecutable = Join-Path $outputDirectory "Richman.exe"
           New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-          $godotRun = Start-Process -FilePath $env:GODOT_EXE -ArgumentList @("--headless", "--path", $projectPath, "--export-release", "Windows Desktop", $gameExecutable) -NoNewWindow -Wait -PassThru
+          $godotRun = Start-Process -FilePath $env:GODOT_EXE -ArgumentList @("--headless", "--path", $projectPath, "--export-release", '"Windows Desktop"', $gameExecutable) -NoNewWindow -Wait -PassThru
           if ($godotRun.ExitCode -ne 0) { throw "Godot Windows export failed with exit code $($godotRun.ExitCode)." }
           if (-not (Test-Path -LiteralPath $gameExecutable)) {
             $nearbyExecutables = @(Get-ChildItem -LiteralPath (Get-Location).Path -Filter "Richman.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) -join ", "
