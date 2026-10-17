@@ -10,9 +10,11 @@ namespace Richman.GodotPresentation
         private readonly Dictionary<int, Node3D> _tiles = new Dictionary<int, Node3D>();
         private readonly Dictionary<int, Node3D> _pawns = new Dictionary<int, Node3D>();
         private readonly Dictionary<int, StandardMaterial3D> _tileMaterials = new Dictionary<int, StandardMaterial3D>();
+        private readonly Dictionary<int, Color> _playerColors = new Dictionary<int, Color>();
+        private readonly Dictionary<int, int> _playerCharacters = new Dictionary<int, int>();
         private BoardDefinition _board;
 
-        public void Build(BoardDefinition board, IReadOnlyList<PlayerState> players)
+        public void Build(BoardDefinition board, IReadOnlyList<PlayerState> players, int[] characters, Color[] colors)
         {
             _board = board;
             var root = new Node3D { Name = "ImportedWorldTour" };
@@ -27,7 +29,10 @@ namespace Richman.GodotPresentation
                     if (child is Node3D visual) visual.Visible = false;
 
             for (var i = 0; i < board.TileCount; i++) BuildTile(board.GetTileAt(i));
-            for (var i = 0; i < players.Count; i++) BuildPawn(players[i]);
+            for (var i = 0; i < players.Count; i++)
+            {
+                _playerCharacters[players[i].Id] = characters[i]; _playerColors[players[i].Id] = colors[i]; BuildPawn(players[i]);
+            }
             ValidateRoute();
         }
 
@@ -45,6 +50,13 @@ namespace Richman.GodotPresentation
         }
 
         public Node3D GetPawn(int playerId) => _pawns.TryGetValue(playerId, out var pawn) ? pawn : null;
+
+        public void SetPreview(int playerId, int character, Color color)
+        {
+            _playerCharacters[playerId] = character; _playerColors[playerId] = color;
+            if (_pawns.TryGetValue(playerId, out var old)) { old.QueueFree(); _pawns.Remove(playerId); }
+            BuildPawn(playerId, _board.StartPositionIndex, character, color);
+        }
 
         public void SyncPawns(GameState state)
         {
@@ -149,24 +161,50 @@ namespace Richman.GodotPresentation
             GD.Print("WORLD_TOUR_ROUTE_OK main=", _board.MainRouteTileCount, " all=", _board.TileCount, " graph=Core-authoritative");
         }
 
-        private void BuildPawn(PlayerState player)
+        private void BuildPawn(PlayerState player) => BuildPawn(player, _playerCharacters.TryGetValue(player.Id, out var character) ? character : 0, _playerColors.TryGetValue(player.Id, out var color) ? color : PlayerColor(player.Id));
+
+        private void BuildPawn(PlayerState player, int character, Color color)
         {
-            var pawn = new Node3D { Name = "Pawn_" + player.Id, Position = GetPawnPosition(player.CurrentTileIndex, player.Id) };
-            pawn.AddChild(new MeshInstance3D { Name = "PawnBase", Mesh = new CylinderMesh { TopRadius = 0.27f, BottomRadius = 0.31f, Height = 0.12f, RadialSegments = 10 }, Position = Vector3.Up * 0.08f, MaterialOverride = Material(PlayerColor(player.Id).Darkened(0.18f)) });
-            pawn.AddChild(new MeshInstance3D { Name = "PawnBody", Mesh = new SphereMesh { Radius = 0.22f, Height = 0.68f, RadialSegments = 10, Rings = 6 }, Position = Vector3.Up * 0.42f, MaterialOverride = Material(PlayerColor(player.Id)) });
-            pawn.AddChild(new MeshInstance3D { Name = "PawnCrown", Mesh = new SphereMesh { Radius = 0.16f, Height = 0.28f, RadialSegments = 8, Rings = 4 }, Position = Vector3.Up * 0.76f, MaterialOverride = Material(new Color("#fff0bf")) });
-            pawn.AddChild(new Label3D { Text = "P" + player.Id, FontSize = 26, PixelSize = 0.003f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = Vector3.Up * 1.08f, Modulate = PlayerColor(player.Id) });
+            BuildPawn(player.Id, player.CurrentTileIndex, character, color);
+        }
+
+        private void BuildPawn(int playerId, int tileIndex, int character, Color color)
+        {
+            var pawn = new Node3D { Name = "Pawn_" + playerId, Position = GetPawnPosition(tileIndex, playerId) };
+            var accent = Material(color);
+            var skin = Material(new Color("#d7b99c"));
+            var cloth = Material(new[] { new Color("#526b80"), new Color("#8f6558"), new Color("#687a5e"), new Color("#75627f") }[character % 4]);
+            var dark = Material(new Color("#35434a"));
+            pawn.AddChild(new MeshInstance3D { Name = "PawnBase", Mesh = new CylinderMesh { TopRadius = 0.27f, BottomRadius = 0.31f, Height = 0.12f, RadialSegments = 18 }, Position = Vector3.Up * 0.08f, MaterialOverride = Material(color.Darkened(0.25f)) });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnBody", Mesh = new CapsuleMesh { Radius = 0.20f, Height = 0.60f, RadialSegments = 18, Rings = 8 }, Position = Vector3.Up * 0.48f, MaterialOverride = cloth });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnHead", Mesh = new SphereMesh { Radius = 0.17f, Height = 0.34f, RadialSegments = 18, Rings = 10 }, Position = Vector3.Up * 0.90f, MaterialOverride = skin });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnScarf", Mesh = new TorusMesh { InnerRadius = 0.145f, OuterRadius = 0.20f, Rings = 18, RingSegments = 8 }, Position = Vector3.Up * 0.70f, MaterialOverride = accent });
+            var leftLeg = new MeshInstance3D { Mesh = new CapsuleMesh { Radius = .065f, Height = .28f }, Position = new Vector3(-.09f, .27f, 0), MaterialOverride = dark };
+            var rightLeg = (MeshInstance3D)leftLeg.Duplicate(); rightLeg.Position = new Vector3(.09f, .27f, 0);
+            pawn.AddChild(leftLeg); pawn.AddChild(rightLeg);
+            var hat = new MeshInstance3D { Name = "CharacterSilhouette", Position = Vector3.Up * 1.13f, MaterialOverride = accent };
+            switch (character % 4)
+            {
+                case 0: hat.Mesh = new CylinderMesh { TopRadius = .06f, BottomRadius = .16f, Height = .24f, RadialSegments = 12 }; break;
+                case 1: hat.Mesh = new BoxMesh { Size = new Vector3(.35f, .12f, .30f) }; hat.Position = Vector3.Up * 1.04f; break;
+                case 2: hat.Mesh = new SphereMesh { Radius = .19f, Height = .11f, RadialSegments = 16, Rings = 8 }; break;
+                case 3: hat.Mesh = new SphereMesh { Radius = .22f, Height = .17f, RadialSegments = 16, Rings = 8 }; hat.Position = Vector3.Up * 1.08f; break;
+            }
+            pawn.AddChild(hat);
+            pawn.AddChild(new Label3D { Text = "P" + playerId, FontSize = 26, PixelSize = 0.003f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = Vector3.Up * 1.38f, Modulate = color });
             AddChild(pawn);
-            _pawns[player.Id] = pawn;
+            _pawns[playerId] = pawn;
         }
 
         private Vector3 GetPawnPosition(int tileIndex, int playerId)
         {
-            var offset = new Vector3(((playerId - 1) % 2) * 0.22f - 0.11f, 0.18f, ((playerId - 1) / 2) * 0.22f - 0.11f);
+            var offset = PreviewOffset(playerId);
             return GetTilePosition(tileIndex) + offset;
         }
 
-        private static void UpdatePropertyVisual(Node3D tile, BoardTileDefinition definition, PropertyState property)
+        private static Vector3 PreviewOffset(int playerId) => new Vector3(((playerId - 1) % 2) * 0.22f - 0.11f, 0.18f, ((playerId - 1) / 2) * 0.22f - 0.11f);
+
+        private void UpdatePropertyVisual(Node3D tile, BoardTileDefinition definition, PropertyState property)
         {
             var existing = tile.GetNodeOrNull<Node3D>("Building");
             if (existing != null) existing.QueueFree();
@@ -174,30 +212,31 @@ namespace Richman.GodotPresentation
 
             var level = property.UpgradeLevel;
             var building = new Node3D { Name = "Building" };
-            var color = PlayerColor(property.OwnerId.Value);
-            var width = level == 1 ? .40f : level == 2 ? .55f : .66f;
-            var height = level == 1 ? .40f : level == 2 ? .65f : .88f;
-            building.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(width, height, width) }, Position = new Vector3(0, .15f + height * .5f, 0), MaterialOverride = Material(new Color("#fff0d3")) });
-            building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { BottomRadius = width * .75f, TopRadius = .04f, Height = .27f, RadialSegments = 6 }, Position = new Vector3(0, .2f + height + .13f, 0), MaterialOverride = Material(color) });
+            var color = property.OwnerId.HasValue && _playerColors.TryGetValue(property.OwnerId.Value, out var selectedColor) ? selectedColor : new Color("#718276");
+            var width = level == 1 ? .28f : level == 2 ? .34f : .40f;
+            var height = level == 1 ? .30f : level == 2 ? .48f : .64f;
+            building.Position = new Vector3(.31f, 0, .25f);
+            building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = width * .55f, BottomRadius = width * .72f, Height = height, RadialSegments = 10, Rings = 3 }, Position = new Vector3(0, .10f + height * .5f, 0), MaterialOverride = Material(new Color("#d6d0c3")) });
+            building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { BottomRadius = width * .80f, TopRadius = .035f, Height = .23f, RadialSegments = 10 }, Position = new Vector3(0, .10f + height + .115f, 0), MaterialOverride = Material(color) });
             if (level >= 3)
-                building.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(width * .72f, .12f, width * .72f) }, Position = new Vector3(0, .2f + height * .58f, 0), MaterialOverride = Material(color.Lightened(.16f)) });
+                building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = width * .84f, BottomRadius = width * .84f, Height = .09f, RadialSegments = 10 }, Position = new Vector3(0, .10f + height * .58f, 0), MaterialOverride = Material(color.Lightened(.10f)) });
             if (level >= 4)
-                building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = .10f, BottomRadius = .18f, Height = .48f, RadialSegments = 8 }, Position = new Vector3(0, .2f + height + .42f, 0), MaterialOverride = Material(new Color("#e5aa4f")) });
+                building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = .07f, BottomRadius = .12f, Height = .30f, RadialSegments = 10 }, Position = new Vector3(0, .10f + height + .34f, 0), MaterialOverride = Material(new Color("#b28e62")) });
             tile.AddChild(building);
         }
 
-        private static Color TileColor(BoardTileDefinition definition, PropertyState property)
+        private Color TileColor(BoardTileDefinition definition, PropertyState property)
         {
-            if (property != null && property.OwnerId.HasValue) return PlayerColor(property.OwnerId.Value).Lerp(Colors.White, 0.18f);
+            if (property != null && property.OwnerId.HasValue && _playerColors.TryGetValue(property.OwnerId.Value, out var selectedColor)) return selectedColor.Lerp(new Color("#e8e1d5"), 0.34f);
             switch (definition.Type)
             {
-                case BoardTileType.Start: return new Color("#ffe16b");
-                case BoardTileType.Airport: return new Color("#ff914d");
-                case BoardTileType.Prison: return new Color("#566579");
-                case BoardTileType.Hospital: return new Color("#fff4ef");
+                case BoardTileType.Start: return new Color("#d9c18f");
+                case BoardTileType.Airport: return new Color("#c9977c");
+                case BoardTileType.Prison: return new Color("#8a918f");
+                case BoardTileType.Hospital: return new Color("#ded8d0");
                 case BoardTileType.Court: return new Color("#d7c5aa");
-                case BoardTileType.Chance: return new Color("#d79af2");
-                case BoardTileType.Destiny: return new Color("#77a8e8");
+                case BoardTileType.Chance: return new Color("#ab98ad");
+                case BoardTileType.Destiny: return new Color("#8d9baa");
                 case BoardTileType.Property:
                     var colors = new Dictionary<string, Color>
                     {
@@ -208,18 +247,20 @@ namespace Richman.GodotPresentation
                         ["southern-stops"] = new Color("#79b8a7"), ["spain"] = new Color("#e9a958"), ["southeast-asia"] = new Color("#78b978"),
                         ["silk-road"] = new Color("#d99656")
                     };
-                    if (colors.TryGetValue(definition.DistrictId, out var districtColor)) return districtColor;
+                    if (colors.TryGetValue(definition.DistrictId, out var districtColor)) return districtColor.Lerp(new Color("#e8e1d5"), 0.38f);
                     return new Color("#c9c9c9");
                 default: return new Color("#d6c5a5");
             }
         }
 
-        private static Color PlayerColor(int id)
+        private Color PlayerColor(int id)
         {
-            var colors = new[] { new Color("#ef6262"), new Color("#4d96ff"), new Color("#54c878"), new Color("#b678e6") };
+            if (_playerColors.TryGetValue(id, out var selectedColor)) return selectedColor;
+            var colors = new[] { new Color("#bf705f"), new Color("#6387a5"), new Color("#82956f"), new Color("#a080a0") };
             return colors[(id - 1) % colors.Length];
         }
 
-        private static StandardMaterial3D Material(Color color) => new StandardMaterial3D { AlbedoColor = color, Roughness = 0.78f };
+        private static StandardMaterial3D Material(Color color) => new StandardMaterial3D { AlbedoColor = color, Roughness = 0.9f, Metallic = 0f };
+
     }
 }

@@ -318,6 +318,25 @@ namespace Richman.Simulation
             bankrupt.Execute(new RollDiceCommand(1));
             Require(bankrupt.State.GetPlayer(1).Status == PlayerStatus.Bankrupt && bankrupt.State.GetPlayer(2).Status == PlayerStatus.Winner, "bankruptcy and last-player victory");
             Console.WriteLine("CORE_BANKRUPTCY_OK last-player-standing=true");
+
+            var trade = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 1), new DiceResult(1, 1)));
+            trade.Execute(new RollDiceCommand(1)); trade.Execute(new BuyPropertyCommand(1)); trade.Execute(new EndTurnCommand(1));
+            trade.Execute(new RollDiceCommand(2)); trade.Execute(new BuyPropertyCommand(2)); trade.Execute(new EndTurnCommand(2));
+            trade.Execute(new RollDiceCommand(3)); trade.Execute(new EndTurnCommand(3));
+            trade.Execute(new RollDiceCommand(4)); trade.Execute(new EndTurnCommand(4));
+            var originalOneMoney = trade.State.GetPlayer(1).Money;
+            var originalTwoMoney = trade.State.GetPlayer(2).Money;
+            var rejectedTrade = trade.Execute(new TradeCommand(1, 2, 5000, 0, "singapore-marina"));
+            Require(rejectedTrade.ErrorCode == CommandErrorCode.InsufficientFunds && trade.State.GetPlayer(1).Money == originalOneMoney &&
+                    trade.State.GetPlayer(2).Money == originalTwoMoney && trade.State.GetProperty("singapore-marina").OwnerId == 1,
+                "rejected trade leaves balances and ownership unchanged");
+            var completedTrade = trade.Execute(new TradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
+            Require(completedTrade.Succeeded && trade.State.GetProperty("singapore-marina").OwnerId == 2 &&
+                    trade.State.GetProperty("kyoto-gion").OwnerId == 1 && trade.State.GetPlayer(1).Money == originalOneMoney - 10 &&
+                    trade.State.GetPlayer(2).Money == originalTwoMoney + 10 && trade.State.CurrentPlayerId == 1,
+                "accepted trade exchanges cash and ownership atomically");
+            Console.WriteLine("CORE_TRADE_OK cash_and_properties=exchanged rejected_trade=atomic turn_preserved=true");
             Console.WriteLine("CORE_VERIFICATION_OK");
         }
 

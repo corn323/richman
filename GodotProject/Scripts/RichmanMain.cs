@@ -1,5 +1,6 @@
 using Godot;
 using Richman.Core;
+using System.Collections.Generic;
 
 namespace Richman.GodotPresentation
 {
@@ -12,14 +13,18 @@ namespace Richman.GodotPresentation
         private GameSession _session;
         private bool _busy;
         private int _lastLandingPlayerId;
+        private readonly int[] _characters = { 0, 1, 2, 3 };
+        private readonly Color[] _colors = { new Color("#bf705f"), new Color("#6387a5"), new Color("#82956f"), new Color("#a080a0") };
 
         public override void _Ready()
         {
             BuildPresentationBootstrap();
-            _session = PrototypeGameFactory.CreateFourPlayerSession(928371);
             _board = new GodotBoardView { Name = "Board" };
             AddChild(_board);
-            _board.Build(_session.Board, _session.State.Players);
+            var board = PrototypeBoardFactory.Create();
+            var setup = new List<PlayerSetup> { new PlayerSetup(1, "旅人・小徑"), new PlayerSetup(2, "建築師・石榴"), new PlayerSetup(3, "園藝師・苔苔"), new PlayerSetup(4, "觀星者・弦月") };
+            var previewSession = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board, setup, new SeededDiceRoller(928371));
+            _board.Build(board, previewSession.State.Players, _characters, _colors);
             _dice = new GodotDiceView { Name = "Dice" };
             AddChild(_dice);
             _dice.Build();
@@ -28,18 +33,38 @@ namespace Richman.GodotPresentation
             _camera.FocusOverview();
             _hud = new GodotGameplayHud { Name = "GameplayHUD" };
             AddChild(_hud);
-            _hud.Build(Roll, Buy, Upgrade, EndTurn, ChooseRoute);
-            _board.ApplyState(_session.State);
-            _board.SyncPawns(_session.State);
-            _hud.Render(_session.State, "Player 1, roll the dice.", false);
+            _hud.Build(StartGame, PreviewCharacter, Roll, Buy, Upgrade, EndTurn, ChooseRoute, Trade);
             if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--test-pawn-move") >= 0)
                 _ = RunPawnMoveSmoke();
+        }
+
+        private void PreviewCharacter(int playerIndex, int character, Color color)
+        {
+            _characters[playerIndex] = character; _colors[playerIndex] = color;
+            _board.SetPreview(playerIndex + 1, character, color);
+        }
+
+        private void StartGame()
+        {
+            _characters[0] = _hud.SelectedCharacters[0]; _characters[1] = _hud.SelectedCharacters[1];
+            _characters[2] = _hud.SelectedCharacters[2]; _characters[3] = _hud.SelectedCharacters[3];
+            _colors[0] = _hud.SelectedColors[0]; _colors[1] = _hud.SelectedColors[1];
+            _colors[2] = _hud.SelectedColors[2]; _colors[3] = _hud.SelectedColors[3];
+            var names = new[] { "旅人・小徑", "建築師・石榴", "園藝師・苔苔", "觀星者・弦月" };
+            var players = new List<PlayerSetup>();
+            for (var i = 0; i < 4; i++) players.Add(new PlayerSetup(i + 1, names[_characters[i]]));
+            _session = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create(), players, new SeededDiceRoller(928371));
+            _board.SetPreview(1, _characters[0], _colors[0]); _board.SetPreview(2, _characters[1], _colors[1]);
+            _board.SetPreview(3, _characters[2], _colors[2]); _board.SetPreview(4, _characters[3], _colors[3]);
+            _board.SyncPawns(_session.State); _board.ApplyState(_session.State);
+            _hud.ShowGame(); _hud.Render(_session.State, "旅程開始！輪到 " + players[0].DisplayName + "。", false);
         }
 
         private async System.Threading.Tasks.Task RunPawnMoveSmoke()
         {
             try
             {
+                StartGame();
                 var player = _session.State.GetPlayer(1);
                 var result = _session.Execute(new RollDiceCommand(player.Id));
                 if (!result.Succeeded || result.DiceResult == null || result.PathTileIndices.Count == 0)
@@ -71,10 +96,10 @@ namespace Richman.GodotPresentation
                 Environment = new Environment
                 {
                     BackgroundMode = Environment.BGMode.Color,
-                    BackgroundColor = new Color("#101a2c"),
+                    BackgroundColor = new Color("#d8d3c8"),
                     AmbientLightSource = Environment.AmbientSource.Color,
-                    AmbientLightColor = new Color("#b9cfff"),
-                    AmbientLightEnergy = 0.65f,
+                    AmbientLightColor = new Color("#ded8cc"),
+                    AmbientLightEnergy = 0.82f,
                     TonemapMode = Environment.ToneMapper.Filmic
                 }
             };
@@ -83,8 +108,8 @@ namespace Richman.GodotPresentation
             var light = new DirectionalLight3D
             {
                 RotationDegrees = new Vector3(-52f, -28f, 0f),
-                LightColor = new Color("#fff1d1"),
-                LightEnergy = 1.2f,
+                LightColor = new Color("#f4e9d4"),
+                LightEnergy = 0.92f,
                 ShadowEnabled = true
             };
             AddChild(light);
@@ -163,6 +188,14 @@ namespace Richman.GodotPresentation
         {
             Execute(new EndTurnCommand(_session.State.CurrentPlayerId), "Turn ended.");
             _camera.Focus(_board.GetPawn(_session.State.CurrentPlayerId).GlobalPosition, 12f);
+        }
+
+        private void Trade(TradeCommand command)
+        {
+            if (_busy || _session.State.Outcome != null) return;
+            var result = _session.Execute(command);
+            _board.ApplyState(_session.State);
+            _hud.Render(_session.State, result.Succeeded ? _session.State.LastEventMessage : result.ErrorMessage, false);
         }
 
         private void Execute(GameCommand command, string message)

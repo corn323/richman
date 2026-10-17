@@ -51,6 +51,28 @@ namespace Richman.Core
         public EndTurnCommand(int playerId) : base(playerId) { }
     }
 
+    public sealed class TradeCommand : GameCommand
+    {
+        public TradeCommand(int playerId, int targetPlayerId, int offeredMoney, int requestedMoney,
+            string offeredPropertyId = null, string requestedPropertyId = null) : base(playerId)
+        {
+            if (targetPlayerId <= 0) throw new ArgumentOutOfRangeException(nameof(targetPlayerId));
+            if (offeredMoney < 0) throw new ArgumentOutOfRangeException(nameof(offeredMoney));
+            if (requestedMoney < 0) throw new ArgumentOutOfRangeException(nameof(requestedMoney));
+            TargetPlayerId = targetPlayerId;
+            OfferedMoney = offeredMoney;
+            RequestedMoney = requestedMoney;
+            OfferedPropertyId = offeredPropertyId ?? string.Empty;
+            RequestedPropertyId = requestedPropertyId ?? string.Empty;
+        }
+
+        public int TargetPlayerId { get; }
+        public int OfferedMoney { get; }
+        public int RequestedMoney { get; }
+        public string OfferedPropertyId { get; }
+        public string RequestedPropertyId { get; }
+    }
+
     public enum CommandErrorCode
     {
         None,
@@ -63,7 +85,8 @@ namespace Richman.Core
         PropertyUnavailable,
         InsufficientFunds,
         PropertyAlreadyMaxLevel,
-        InvalidRouteChoice
+        InvalidRouteChoice,
+        InvalidTrade
     }
 
     public sealed class CommandResult

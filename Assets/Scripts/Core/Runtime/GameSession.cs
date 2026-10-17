@@ -112,6 +112,7 @@ namespace Richman.Core
             if (command is BuyPropertyCommand) return ExecuteBuy(player);
             if (command is UpgradePropertyCommand upgrade) return ExecuteUpgrade(player, upgrade);
             if (command is ChooseRouteCommand chooseRoute) return ExecuteChooseRoute(player, chooseRoute);
+            if (command is TradeCommand trade) return ExecuteTrade(player, trade);
             if (command is EndTurnCommand) return ExecuteEndTurn(player);
             return CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
         }
@@ -314,6 +315,44 @@ namespace Richman.Core
             State.MovementStepsRemaining = 0;
             State.SetRouteChoices(null);
             AdvanceTurn();
+            return CommandResult.Success();
+        }
+
+        private CommandResult ExecuteTrade(PlayerState player, TradeCommand command)
+        {
+            var turnCheck = ValidateCurrentPlayer(player);
+            if (turnCheck != null) return turnCheck;
+            if (State.Phase == TurnPhase.Finished || State.Phase == TurnPhase.AwaitingAction && State.PendingAction == PendingAction.ChooseRoute)
+                return CommandResult.Failure(CommandErrorCode.InvalidPhase, "Finish the required movement choice before trading.");
+
+            var target = State.GetPlayer(command.TargetPlayerId);
+            if (target == null || target.Id == player.Id || target.Status != PlayerStatus.Active)
+                return CommandResult.Failure(CommandErrorCode.InvalidTrade, "Choose another active player for this trade.");
+            if (command.OfferedMoney > player.Money || command.RequestedMoney > target.Money)
+                return CommandResult.Failure(CommandErrorCode.InsufficientFunds, "One of the players does not have enough money to complete this trade.");
+            var playerFinalMoney = (long)player.Money - command.OfferedMoney + command.RequestedMoney;
+            var targetFinalMoney = (long)target.Money + command.OfferedMoney - command.RequestedMoney;
+            if (playerFinalMoney > int.MaxValue || targetFinalMoney > int.MaxValue)
+                return CommandResult.Failure(CommandErrorCode.InvalidTrade, "This trade would exceed the money limit.");
+            if (command.OfferedPropertyId == command.RequestedPropertyId && !string.IsNullOrEmpty(command.OfferedPropertyId))
+                return CommandResult.Failure(CommandErrorCode.InvalidTrade, "A property cannot be traded for itself.");
+
+            var offeredProperty = string.IsNullOrEmpty(command.OfferedPropertyId) ? null : State.GetProperty(command.OfferedPropertyId);
+            var requestedProperty = string.IsNullOrEmpty(command.RequestedPropertyId) ? null : State.GetProperty(command.RequestedPropertyId);
+            if (!string.IsNullOrEmpty(command.OfferedPropertyId) && (offeredProperty == null || offeredProperty.OwnerId != player.Id))
+                return CommandResult.Failure(CommandErrorCode.PropertyUnavailable, "You can only offer a property you own.");
+            if (!string.IsNullOrEmpty(command.RequestedPropertyId) && (requestedProperty == null || requestedProperty.OwnerId != target.Id))
+                return CommandResult.Failure(CommandErrorCode.PropertyUnavailable, "The other player must own the requested property.");
+            if (command.OfferedMoney == 0 && command.RequestedMoney == 0 && offeredProperty == null && requestedProperty == null)
+                return CommandResult.Failure(CommandErrorCode.InvalidTrade, "A trade must exchange money or property.");
+
+            player.Spend(command.OfferedMoney);
+            target.Spend(command.RequestedMoney);
+            player.AddMoney(command.RequestedMoney);
+            target.AddMoney(command.OfferedMoney);
+            if (offeredProperty != null) offeredProperty.SetOwner(target.Id);
+            if (requestedProperty != null) requestedProperty.SetOwner(player.Id);
+            State.LastEventMessage = player.DisplayName + " 與 " + target.DisplayName + " 完成交易。";
             return CommandResult.Success();
         }
 

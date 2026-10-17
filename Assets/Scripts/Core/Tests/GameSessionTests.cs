@@ -21,6 +21,42 @@ namespace Richman.Core.Tests
         }
 
         [Test]
+        public void TradeExchangesMoneyAndPropertiesAtomicallyBetweenActivePlayers()
+        {
+            var session = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create().Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 1), new DiceResult(1, 1)));
+            Assert.That(session.Execute(new RollDiceCommand(1)).Succeeded, Is.True);
+            Assert.That(session.Execute(new BuyPropertyCommand(1)).Succeeded, Is.True);
+            Assert.That(session.Execute(new EndTurnCommand(1)).Succeeded, Is.True);
+            Assert.That(session.Execute(new RollDiceCommand(2)).Succeeded, Is.True);
+            Assert.That(session.Execute(new BuyPropertyCommand(2)).Succeeded, Is.True);
+            Assert.That(session.Execute(new EndTurnCommand(2)).Succeeded, Is.True);
+            Assert.That(session.Execute(new RollDiceCommand(3)).Succeeded, Is.True);
+            Assert.That(session.Execute(new EndTurnCommand(3)).Succeeded, Is.True);
+            Assert.That(session.Execute(new RollDiceCommand(4)).Succeeded, Is.True);
+            Assert.That(session.Execute(new EndTurnCommand(4)).Succeeded, Is.True);
+
+            var playerOne = session.State.GetPlayer(1);
+            var playerTwo = session.State.GetPlayer(2);
+            var originalOneMoney = playerOne.Money;
+            var originalTwoMoney = playerTwo.Money;
+            var rejected = session.Execute(new TradeCommand(1, 2, 5000, 0, "singapore-marina"));
+            Assert.That(rejected.ErrorCode, Is.EqualTo(CommandErrorCode.InsufficientFunds));
+            Assert.That(playerOne.Money, Is.EqualTo(originalOneMoney));
+            Assert.That(playerTwo.Money, Is.EqualTo(originalTwoMoney));
+            Assert.That(session.State.GetProperty("singapore-marina").OwnerId, Is.EqualTo(1));
+
+            var trade = session.Execute(new TradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
+
+            Assert.That(trade.Succeeded, Is.True);
+            Assert.That(session.State.GetProperty("singapore-marina").OwnerId, Is.EqualTo(2));
+            Assert.That(session.State.GetProperty("kyoto-gion").OwnerId, Is.EqualTo(1));
+            Assert.That(playerOne.Money, Is.EqualTo(originalOneMoney - 10));
+            Assert.That(playerTwo.Money, Is.EqualTo(originalTwoMoney + 10));
+            Assert.That(session.State.CurrentPlayerId, Is.EqualTo(1));
+        }
+
+        [Test]
         public void PrototypeMapIdsAndSpecialTileTypesMatchTheMapRoute()
         {
             var board = PrototypeBoardFactory.Create();
