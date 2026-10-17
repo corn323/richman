@@ -11,6 +11,7 @@ namespace Richman.GodotPresentation
         private GodotGameplayHud _hud;
         private GameSession _session;
         private bool _busy;
+        private int _lastLandingPlayerId;
 
         public override void _Ready()
         {
@@ -67,15 +68,57 @@ namespace Richman.GodotPresentation
             var from = player.CurrentTileIndex;
             var result = _session.Execute(new RollDiceCommand(player.Id));
             if (!result.Succeeded) { _hud.Render(_session.State, result.ErrorMessage, false); return; }
+            if (result.DiceResult == null)
+            {
+                _lastLandingPlayerId = player.Id;
+                _board.ApplyState(_session.State);
+                _busy = false;
+                _hud.Render(_session.State, _session.State.LastEventMessage, false);
+                return;
+            }
             _busy = true;
             _hud.Render(_session.State, "Rolling...", true);
             _camera.Focus(_dice.GlobalPosition, 10f);
             await _dice.Roll(result.DiceResult);
             _camera.Focus(_board.GetPawn(player.Id).GlobalPosition, 10f);
             await _board.AnimatePawn(player.Id, from, result.DiceResult.Total);
+            var rolledDestination = (from + result.DiceResult.Total) % _session.Board.TileCount;
+            if (player.CurrentTileIndex != rolledDestination)
+            {
+                await _board.AnimateTransfer(player.Id, player.CurrentTileIndex);
+                _camera.Focus(_board.GetPawn(player.Id).GlobalPosition, 10f);
+            }
+            if (_session.State.LastDrawnCard != null)
+            {
+                GD.Print("CARD_DRAWN ", _session.State.LastDrawnCard.Id, " ", _session.State.LastDrawnCard.Description);
+            }
+            else
+            {
+                var landedTile = _session.Board.GetTileAt(player.CurrentTileIndex);
+                if (landedTile.Type == BoardTileType.Airport || landedTile.Type == BoardTileType.Hospital || landedTile.Type == BoardTileType.Prison || landedTile.Type == BoardTileType.Court)
+                    GD.Print("SPECIAL_TILE_RESOLVED ", landedTile.Id, " ", _session.State.LastEventMessage);
+            }
+            _lastLandingPlayerId = player.Id;
             _board.ApplyState(_session.State);
             _busy = false;
-            _hud.Render(_session.State, "Landed on " + _session.State.Board.GetTileAt(player.CurrentTileIndex).DisplayName, false);
+            var eventMessage = _session.State.LastEventMessage;
+            _hud.Render(_session.State, string.IsNullOrEmpty(eventMessage) ? "Landed on " + _session.State.Board.GetTileAt(player.CurrentTileIndex).DisplayName : eventMessage, false);
+        }
+
+        public override void _UnhandledInput(InputEvent @event)
+        {
+            if (!(@event is InputEventKey key) || !key.Pressed || key.Echo || key.Keycode != Key.B || _busy || _lastLandingPlayerId == 0) return;
+            var last = _session.State.GetPlayer(_lastLandingPlayerId);
+            if (last.CurrentTileIndex != 17) return;
+            _busy = true;
+            _ = AnimateScenicBranch(last.Id, last.CurrentTileIndex);
+        }
+
+        private async System.Threading.Tasks.Task AnimateScenicBranch(int playerId, int tileIndex)
+        {
+            await _board.AnimateBranch(playerId, tileIndex);
+            _camera.Focus(_board.GetPawn(playerId).GlobalPosition, 34f);
+            _busy = false;
         }
 
         private void Buy()

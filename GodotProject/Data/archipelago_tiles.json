@@ -1,0 +1,783 @@
+{
+  "version": 1,
+  "units": "meters",
+  "coordinate_system": "Godot Y-up; Blender Z-up converted by glTF exporter",
+  "main_route": [
+    "start",
+    "tokyo",
+    "chance-2",
+    "canal-row",
+    "destiny-4",
+    "airport-1",
+    "copper-workshop",
+    "city-maintenance",
+    "sunset-apartments",
+    "old-clock-tower",
+    "pixel-arcade",
+    "chance-11",
+    "skyline-lab",
+    "hospital",
+    "harbor-exchange",
+    "ferry-terminal",
+    "bamboo-court",
+    "destiny-17",
+    "mosaic-plaza",
+    "observation-deck",
+    "rainy-day-theater",
+    "chance-21",
+    "foundry-lane",
+    "prison",
+    "solaris-heights",
+    "airport-2",
+    "tideglass-pier",
+    "court",
+    "northlight-studios",
+    "destiny-29",
+    "crescent-bazaar",
+    "chance-31",
+    "neon-garden",
+    "riverside-rest",
+    "aster-foundry",
+    "summit-forum"
+  ],
+  "branch_routes": [
+    {
+      "id": "scenic-overlook",
+      "type": "branch_waypoint",
+      "display_name": "Island Lookout",
+      "x": 5.4,
+      "y": 0.95,
+      "z": 4.85,
+      "rotation": 0,
+      "next_tiles": [
+        "lookout-return"
+      ],
+      "branch_tiles": [],
+      "rejoins_at": "mosaic-plaza",
+      "purpose": "optional scenic route choice; returns to main loop",
+      "main_route": false,
+      "position_index": 36
+    }
+  ],
+  "tiles": [
+    {
+      "id": "start",
+      "position_index": 0,
+      "type": "start",
+      "display_name": "START · Central Station",
+      "x": 0.42,
+      "y": 0.78,
+      "z": -8.3,
+      "rotation": -0.68,
+      "next_tiles": [
+        "tokyo"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "tokyo",
+      "position_index": 1,
+      "type": "property",
+      "display_name": "Tokyo",
+      "x": 2.395,
+      "y": 1.086,
+      "z": -8.277,
+      "rotation": -8.89,
+      "next_tiles": [
+        "chance-2"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "chance-2",
+      "position_index": 2,
+      "type": "chance",
+      "display_name": "Chance · Festival",
+      "x": 4.212,
+      "y": 0.979,
+      "z": -7.992,
+      "rotation": -18.38,
+      "next_tiles": [
+        "canal-row"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "canal-row",
+      "position_index": 3,
+      "type": "property",
+      "display_name": "Canal Row",
+      "x": 5.85,
+      "y": 0.943,
+      "z": -7.448,
+      "rotation": -28.54,
+      "next_tiles": [
+        "destiny-4"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "destiny-4",
+      "position_index": 4,
+      "type": "destiny",
+      "display_name": "Destiny · Sky Tram",
+      "x": 7.311,
+      "y": 0.988,
+      "z": -6.654,
+      "rotation": -38.45,
+      "next_tiles": [
+        "airport-1"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "airport-1",
+      "position_index": 5,
+      "type": "airport",
+      "display_name": "Airport · Air Route",
+      "x": 8.599,
+      "y": 0.666,
+      "z": -5.631,
+      "rotation": -47.63,
+      "next_tiles": [
+        "copper-workshop"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "copper-workshop",
+      "position_index": 6,
+      "type": "property",
+      "display_name": "Copper Workshop",
+      "x": 9.712,
+      "y": 0.406,
+      "z": -4.41,
+      "rotation": -56.33,
+      "next_tiles": [
+        "city-maintenance"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "city-maintenance",
+      "position_index": 7,
+      "type": "tax",
+      "display_name": "City Maintenance",
+      "x": 10.631,
+      "y": 0.589,
+      "z": -3.032,
+      "rotation": -65.39,
+      "next_tiles": [
+        "sunset-apartments"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "sunset-apartments",
+      "position_index": 8,
+      "type": "property",
+      "display_name": "Sunset Apartments",
+      "x": 11.312,
+      "y": 0.693,
+      "z": -1.544,
+      "rotation": -75.9,
+      "next_tiles": [
+        "old-clock-tower"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "old-clock-tower",
+      "position_index": 9,
+      "type": "landmark",
+      "display_name": "Old Clock Tower",
+      "x": 11.7,
+      "y": 0.685,
+      "z": 0.0,
+      "rotation": -88.8,
+      "next_tiles": [
+        "pixel-arcade"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "pixel-arcade",
+      "position_index": 10,
+      "type": "property",
+      "display_name": "Pixel Arcade",
+      "x": 11.732,
+      "y": 0.991,
+      "z": 1.544,
+      "rotation": -104.12,
+      "next_tiles": [
+        "chance-11"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "chance-11",
+      "position_index": 11,
+      "type": "chance",
+      "display_name": "Chance · Street Fair",
+      "x": 11.358,
+      "y": 1.181,
+      "z": 3.032,
+      "rotation": -120.31,
+      "next_tiles": [
+        "skyline-lab"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "skyline-lab",
+      "position_index": 12,
+      "type": "property",
+      "display_name": "Skyline Lab",
+      "x": 10.552,
+      "y": 0.918,
+      "z": 4.41,
+      "rotation": -135.12,
+      "next_tiles": [
+        "hospital"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "hospital",
+      "position_index": 13,
+      "type": "hospital",
+      "display_name": "Hospital",
+      "x": 9.326,
+      "y": 0.765,
+      "z": 5.631,
+      "rotation": -147.34,
+      "next_tiles": [
+        "harbor-exchange"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "harbor-exchange",
+      "position_index": 14,
+      "type": "property",
+      "display_name": "Harbor Exchange",
+      "x": 7.731,
+      "y": 0.768,
+      "z": 6.654,
+      "rotation": -157.11,
+      "next_tiles": [
+        "ferry-terminal"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "ferry-terminal",
+      "position_index": 15,
+      "type": "transit",
+      "display_name": "Ferry Terminal",
+      "x": 5.85,
+      "y": 0.507,
+      "z": 7.448,
+      "rotation": -165.18,
+      "next_tiles": [
+        "bamboo-court"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "bamboo-court",
+      "position_index": 16,
+      "type": "property",
+      "display_name": "Bamboo Court",
+      "x": 3.792,
+      "y": 0.398,
+      "z": 7.992,
+      "rotation": -172.38,
+      "next_tiles": [
+        "destiny-17"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "destiny-17",
+      "position_index": 17,
+      "type": "destiny",
+      "display_name": "Destiny · Transit",
+      "x": 1.668,
+      "y": 0.732,
+      "z": 8.277,
+      "rotation": -179.36,
+      "next_tiles": [
+        "mosaic-plaza"
+      ],
+      "branch_tiles": [
+        "scenic-overlook"
+      ],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "mosaic-plaza",
+      "position_index": 18,
+      "type": "property",
+      "display_name": "Mosaic Plaza",
+      "x": -0.42,
+      "y": 0.906,
+      "z": 8.3,
+      "rotation": 173.4,
+      "next_tiles": [
+        "observation-deck"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "observation-deck",
+      "position_index": 19,
+      "type": "landmark",
+      "display_name": "Observation Deck",
+      "x": -2.395,
+      "y": 0.876,
+      "z": 8.071,
+      "rotation": 165.65,
+      "next_tiles": [
+        "rainy-day-theater"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "rainy-day-theater",
+      "position_index": 20,
+      "type": "property",
+      "display_name": "Rainy Day Theater",
+      "x": -4.212,
+      "y": 1.073,
+      "z": 7.607,
+      "rotation": 157.51,
+      "next_tiles": [
+        "chance-21"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "chance-21",
+      "position_index": 21,
+      "type": "chance",
+      "display_name": "Chance · Public Art",
+      "x": -5.85,
+      "y": 1.099,
+      "z": 6.928,
+      "rotation": 149.35,
+      "next_tiles": [
+        "foundry-lane"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "foundry-lane",
+      "position_index": 22,
+      "type": "property",
+      "display_name": "Foundry Lane",
+      "x": -7.311,
+      "y": 0.717,
+      "z": 6.063,
+      "rotation": 141.55,
+      "next_tiles": [
+        "prison"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "prison",
+      "position_index": 23,
+      "type": "prison",
+      "display_name": "Prison",
+      "x": -8.599,
+      "y": 0.553,
+      "z": 5.04,
+      "rotation": 134.09,
+      "next_tiles": [
+        "solaris-heights"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "solaris-heights",
+      "position_index": 24,
+      "type": "property",
+      "display_name": "Solaris Heights",
+      "x": -9.712,
+      "y": 0.636,
+      "z": 3.89,
+      "rotation": 126.42,
+      "next_tiles": [
+        "airport-2"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "airport-2",
+      "position_index": 25,
+      "type": "airport",
+      "display_name": "Airport · Island Hopper",
+      "x": -10.631,
+      "y": 0.514,
+      "z": 2.646,
+      "rotation": 117.54,
+      "next_tiles": [
+        "tideglass-pier"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "tideglass-pier",
+      "position_index": 26,
+      "type": "property",
+      "display_name": "Tideglass Pier",
+      "x": -11.312,
+      "y": 0.556,
+      "z": 1.339,
+      "rotation": 106.15,
+      "next_tiles": [
+        "court"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "court",
+      "position_index": 27,
+      "type": "court",
+      "display_name": "Court",
+      "x": -11.7,
+      "y": 0.958,
+      "z": 0.0,
+      "rotation": 91.38,
+      "next_tiles": [
+        "northlight-studios"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "northlight-studios",
+      "position_index": 28,
+      "type": "property",
+      "display_name": "Northlight Studios",
+      "x": -11.732,
+      "y": 1.081,
+      "z": -1.339,
+      "rotation": 74.03,
+      "next_tiles": [
+        "destiny-29"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "destiny-29",
+      "position_index": 29,
+      "type": "destiny",
+      "display_name": "Destiny · Royal Decree",
+      "x": -11.358,
+      "y": 0.928,
+      "z": -2.646,
+      "rotation": 57.08,
+      "next_tiles": [
+        "crescent-bazaar"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "crescent-bazaar",
+      "position_index": 30,
+      "type": "property",
+      "display_name": "Crescent Bazaar",
+      "x": -10.552,
+      "y": 0.978,
+      "z": -3.89,
+      "rotation": 43.15,
+      "next_tiles": [
+        "chance-31"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "chance-31",
+      "position_index": 31,
+      "type": "chance",
+      "display_name": "Chance · Crescent Bazaar",
+      "x": -9.326,
+      "y": 0.891,
+      "z": -5.04,
+      "rotation": 32.66,
+      "next_tiles": [
+        "neon-garden"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "neon-garden",
+      "position_index": 32,
+      "type": "property",
+      "display_name": "Neon Garden",
+      "x": -7.731,
+      "y": 0.501,
+      "z": -6.063,
+      "rotation": 24.71,
+      "next_tiles": [
+        "riverside-rest"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "riverside-rest",
+      "position_index": 33,
+      "type": "special",
+      "display_name": "Riverside Rest",
+      "x": -5.85,
+      "y": 0.445,
+      "z": -6.928,
+      "rotation": 18.24,
+      "next_tiles": [
+        "aster-foundry"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "aster-foundry",
+      "position_index": 34,
+      "type": "property",
+      "display_name": "Aster Foundry",
+      "x": -3.792,
+      "y": 0.674,
+      "z": -7.607,
+      "rotation": 12.34,
+      "next_tiles": [
+        "summit-forum"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "summit-forum",
+      "position_index": 35,
+      "type": "property",
+      "display_name": "Summit Forum",
+      "x": -1.668,
+      "y": 0.679,
+      "z": -8.071,
+      "rotation": 6.25,
+      "next_tiles": [
+        "start"
+      ],
+      "branch_tiles": [],
+      "main_route": true,
+      "bounds": {
+        "x": 1.36,
+        "z": 1.12
+      }
+    },
+    {
+      "id": "scenic-overlook",
+      "type": "branch_waypoint",
+      "display_name": "Island Lookout",
+      "x": 5.4,
+      "y": 0.95,
+      "z": 4.85,
+      "rotation": 0,
+      "next_tiles": [
+        "lookout-return"
+      ],
+      "branch_tiles": [],
+      "rejoins_at": "mosaic-plaza",
+      "purpose": "optional scenic route choice; returns to main loop",
+      "main_route": false,
+      "position_index": 36
+    },
+    {
+      "id": "lookout-return",
+      "position_index": 37,
+      "type": "branch_return",
+      "display_name": "Lookout Return",
+      "x": 6.8,
+      "y": 0.95,
+      "z": 5.5,
+      "rotation": 0,
+      "next_tiles": [
+        "mosaic-plaza"
+      ],
+      "branch_tiles": [],
+      "rejoins_at": "mosaic-plaza",
+      "purpose": "rejoin main loop after optional overlook"
+    }
+  ]
+}

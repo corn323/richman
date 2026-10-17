@@ -5,7 +5,25 @@ namespace Richman.Core
 {
     public sealed class GameSession
     {
+        private static readonly MapCard[] ChanceCards =
+        {
+            new MapCard("chance-festival-grant", "chance", "Festival Grant", "Collect $80 from the city fund.", MapCardEffect.ReceiveMoney, 80),
+            new MapCard("chance-repair-bill", "chance", "Canal Repairs", "Pay $50 for urgent canal repairs.", MapCardEffect.PayBank, 50),
+            new MapCard("chance-public-art", "chance", "Public Art Award", "Collect $100 for your public art project.", MapCardEffect.ReceiveMoney, 100),
+            new MapCard("chance-late-fee", "chance", "Late Fee", "Pay $75 in late fees.", MapCardEffect.PayBank, 75)
+        };
+
+        private static readonly MapCard[] DestinyCards =
+        {
+            new MapCard("destiny-inheritance", "destiny", "Family Inheritance", "Collect $120.", MapCardEffect.ReceiveMoney, 120),
+            new MapCard("destiny-tax-audit", "destiny", "Tax Audit", "Pay $100 to the bank.", MapCardEffect.PayBank, 100),
+            new MapCard("destiny-hospital", "destiny", "Recovery Order", "Spend one turn in hospital.", MapCardEffect.Hospitalize, 1),
+            new MapCard("destiny-prison", "destiny", "Court Summons", "Spend one turn in prison.", MapCardEffect.Imprison, 1)
+        };
+
         private readonly IDiceRoller _diceRoller;
+        private int _chanceCardIndex;
+        private int _destinyCardIndex;
 
         public GameSession(GameModeConfig mode, BoardDefinition board, IReadOnlyList<PlayerSetup> playerSetups, IDiceRoller diceRoller)
         {
@@ -64,6 +82,18 @@ namespace Richman.Core
                 return CommandResult.Failure(CommandErrorCode.InvalidPhase, "The player must finish the current turn before rolling again.");
             }
 
+            State.LastDrawnCard = null;
+            State.LastEventMessage = string.Empty;
+            if (player.DetainedTurnsRemaining > 0)
+            {
+                var reason = player.ServeDetainedTurn();
+                State.LastDiceResult = null;
+                State.PendingAction = PendingAction.None;
+                State.Phase = TurnPhase.AwaitingEndTurn;
+                State.LastEventMessage = reason + " stay: this turn is skipped" + (player.DetainedTurnsRemaining > 0 ? " (" + player.DetainedTurnsRemaining + " turn(s) left)." : ". Released.");
+                return CommandResult.Success();
+            }
+
             var dice = _diceRoller.Roll();
             var from = player.CurrentTileIndex;
             var rawDestination = from + dice.Total;
@@ -74,7 +104,7 @@ namespace Richman.Core
             if (PassedStart(from, dice.Total)) player.AddMoney(Mode.StartBonus);
 
             ResolveLanding(player, Board.GetTileAt(destination));
-            return CommandResult.Success(dice, from, destination);
+            return CommandResult.Success(dice, from, player.CurrentTileIndex);
         }
 
         private bool PassedStart(int fromTileIndex, int steps)
@@ -181,10 +211,75 @@ namespace Richman.Core
                     break;
                 case BoardTileType.Bonus:
                     player.AddMoney(tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount);
+                    State.LastEventMessage = tile.DisplayName + ": collected $" + (tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount) + ".";
+                    break;
+                case BoardTileType.Airport:
+                    ResolveAirport(player, tile);
+                    break;
+                case BoardTileType.Hospital:
+                    player.Detain("Hospital", tile.EffectAmount > 0 ? tile.EffectAmount : 1);
+                    State.LastEventMessage = "Unexpected admission: " + player.DetainedTurnsRemaining + " turn(s) in hospital.";
+                    break;
+                case BoardTileType.Prison:
+                    player.Detain("Prison", tile.EffectAmount > 0 ? tile.EffectAmount : 2);
+                    State.LastEventMessage = "Sent to prison: " + player.DetainedTurnsRemaining + " turn(s) to serve.";
+                    break;
+                case BoardTileType.Court:
+                    var fine = tile.EffectAmount > 0 ? tile.EffectAmount : Mode.TaxAmount;
+                    PayToBank(player, fine);
+                    State.LastEventMessage = "Court judgment: paid $" + fine + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
+                    break;
+                case BoardTileType.Chance:
+                    DrawCard(player, ChanceCards, ref _chanceCardIndex);
+                    break;
+                case BoardTileType.Destiny:
+                    DrawCard(player, DestinyCards, ref _destinyCardIndex);
                     break;
             }
 
             FinishActionOrAdvance(player);
+        }
+
+        private void ResolveAirport(PlayerState player, BoardTileDefinition airport)
+        {
+            for (var i = 0; i < Board.TileCount; i++)
+            {
+                var candidate = Board.GetTileAt(i);
+                if (candidate.Type != BoardTileType.Airport || candidate.PositionIndex == airport.PositionIndex) continue;
+                player.MoveTo(candidate.PositionIndex);
+                State.LastEventMessage = "Airport transfer: flew from " + airport.DisplayName + " to " + candidate.DisplayName + ".";
+                return;
+            }
+
+            State.LastEventMessage = "Airport is closed; no connecting airport is available.";
+        }
+
+        private void DrawCard(PlayerState player, MapCard[] deck, ref int drawIndex)
+        {
+            if (deck == null || deck.Length == 0) throw new InvalidOperationException("A map card deck cannot be empty.");
+            var card = deck[drawIndex % deck.Length];
+            drawIndex = (drawIndex + 1) % deck.Length;
+            State.LastDrawnCard = card;
+
+            switch (card.Effect)
+            {
+                case MapCardEffect.ReceiveMoney:
+                    player.AddMoney(card.Amount);
+                    break;
+                case MapCardEffect.PayBank:
+                    PayToBank(player, card.Amount);
+                    break;
+                case MapCardEffect.Hospitalize:
+                    player.Detain("Hospital", card.Amount);
+                    break;
+                case MapCardEffect.Imprison:
+                    player.Detain("Prison", card.Amount);
+                    break;
+                default:
+                    throw new InvalidOperationException("Unsupported map card effect: " + card.Effect);
+            }
+
+            State.LastEventMessage = card.DeckId.ToUpperInvariant() + " CARD — " + card.Title + ": " + card.Description;
         }
 
         private void ResolveProperty(PlayerState player, BoardTileDefinition tile)

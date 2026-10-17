@@ -12,7 +12,13 @@ namespace Richman.Core
         Bonus,
         Rest,
         Transit,
-        Special
+        Special,
+        Airport,
+        Hospital,
+        Prison,
+        Court,
+        Chance,
+        Destiny
     }
 
     public sealed class BoardTileDefinition
@@ -148,37 +154,37 @@ namespace Richman.Core
         {
             var tiles = new List<BoardTileDefinition>();
             tiles.Add(Simple(tiles, "start", BoardTileType.Start, "Central Station"));
-            tiles.Add(Property(tiles, "lantern-market", "Lantern Market", "market", 120, 12, 60, 12, 30, 60, 100));
-            tiles.Add(Effect(tiles, "garden", BoardTileType.Bonus, "Community Garden", 50));
+            tiles.Add(Property(tiles, "tokyo", "Tokyo", "technology", 120, 12, 60, 12, 30, 60, 100));
+            tiles.Add(Effect(tiles, "chance-2", BoardTileType.Chance, "Chance · Festival", 0));
             tiles.Add(Property(tiles, "canal-row", "Canal Row", "harbor", 140, 14, 70, 14, 35, 70, 115));
-            tiles.Add(Simple(tiles, "rooftop-park", BoardTileType.Rest, "Rooftop Park"));
-            tiles.Add(Simple(tiles, "sky-tram", BoardTileType.Transit, "Sky Tram"));
+            tiles.Add(Effect(tiles, "destiny-4", BoardTileType.Destiny, "Destiny · Sky Tram", 0));
+            tiles.Add(Simple(tiles, "airport-1", BoardTileType.Airport, "Airport · Air Route"));
             tiles.Add(Property(tiles, "copper-workshop", "Copper Workshop", "industrial", 160, 16, 80, 16, 40, 80, 130));
             tiles.Add(Effect(tiles, "city-maintenance", BoardTileType.Tax, "City Maintenance", -100));
             tiles.Add(Property(tiles, "sunset-apartments", "Sunset Apartments", "residential", 180, 18, 90, 18, 45, 90, 145));
-            tiles.Add(Simple(tiles, "clock-tower", BoardTileType.Special, "Old Clock Tower"));
+            tiles.Add(Simple(tiles, "old-clock-tower", BoardTileType.Special, "Old Clock Tower"));
             tiles.Add(Property(tiles, "pixel-arcade", "Pixel Arcade", "entertainment", 200, 20, 100, 20, 50, 100, 160));
-            tiles.Add(Effect(tiles, "street-fair", BoardTileType.Bonus, "Street Fair", 60));
+            tiles.Add(Effect(tiles, "chance-11", BoardTileType.Chance, "Chance · Street Fair", 0));
             tiles.Add(Property(tiles, "skyline-lab", "Skyline Lab", "technology", 220, 22, 110, 22, 55, 110, 175));
-            tiles.Add(Simple(tiles, "courtyard", BoardTileType.Rest, "Quiet Courtyard"));
+            tiles.Add(Effect(tiles, "hospital", BoardTileType.Hospital, "Hospital", 1));
             tiles.Add(Property(tiles, "harbor-exchange", "Harbor Exchange", "harbor", 240, 24, 120, 24, 60, 120, 190));
             tiles.Add(Simple(tiles, "ferry-terminal", BoardTileType.Transit, "Ferry Terminal"));
             tiles.Add(Property(tiles, "bamboo-court", "Bamboo Court", "residential", 260, 26, 130, 26, 65, 130, 205));
-            tiles.Add(Effect(tiles, "transit-fund", BoardTileType.Tax, "Transit Fund", -125));
+            tiles.Add(Effect(tiles, "destiny-17", BoardTileType.Destiny, "Destiny · Transit", 0));
             tiles.Add(Property(tiles, "mosaic-plaza", "Mosaic Plaza", "market", 280, 28, 140, 28, 70, 140, 220));
             tiles.Add(Simple(tiles, "observation-deck", BoardTileType.Special, "Observation Deck"));
             tiles.Add(Property(tiles, "rainy-day-theater", "Rainy Day Theater", "entertainment", 300, 30, 150, 30, 75, 150, 235));
-            tiles.Add(Effect(tiles, "public-art-fund", BoardTileType.Bonus, "Public Art Fund", 75));
+            tiles.Add(Effect(tiles, "chance-21", BoardTileType.Chance, "Chance · Public Art", 0));
             tiles.Add(Property(tiles, "foundry-lane", "Foundry Lane", "industrial", 320, 32, 160, 32, 80, 160, 250));
-            tiles.Add(Simple(tiles, "rooftop-garden", BoardTileType.Rest, "Rooftop Garden"));
+            tiles.Add(Effect(tiles, "prison", BoardTileType.Prison, "Prison", 2));
             tiles.Add(Property(tiles, "solaris-heights", "Solaris Heights", "residential", 340, 34, 170, 34, 85, 170, 265));
-            tiles.Add(Simple(tiles, "monorail-loop", BoardTileType.Transit, "Monorail Loop"));
+            tiles.Add(Simple(tiles, "airport-2", BoardTileType.Airport, "Airport · Island Hopper"));
             tiles.Add(Property(tiles, "tideglass-pier", "Tideglass Pier", "harbor", 360, 36, 180, 36, 90, 180, 280));
-            tiles.Add(Effect(tiles, "infrastructure-works", BoardTileType.Tax, "Infrastructure Works", -175));
+            tiles.Add(Effect(tiles, "court", BoardTileType.Court, "Court", 150));
             tiles.Add(Property(tiles, "northlight-studios", "Northlight Studios", "technology", 380, 38, 190, 38, 95, 190, 295));
-            tiles.Add(Simple(tiles, "quiet-alley", BoardTileType.Special, "Quiet Alley"));
+            tiles.Add(Effect(tiles, "destiny-29", BoardTileType.Destiny, "Destiny · Royal Decree", 0));
             tiles.Add(Property(tiles, "crescent-bazaar", "Crescent Bazaar", "market", 400, 40, 200, 40, 100, 200, 310));
-            tiles.Add(Effect(tiles, "festival-grant", BoardTileType.Bonus, "Festival Grant", 100));
+            tiles.Add(Effect(tiles, "chance-31", BoardTileType.Chance, "Chance · Crescent Bazaar", 0));
             tiles.Add(Property(tiles, "neon-garden", "Neon Garden", "entertainment", 420, 42, 210, 42, 105, 210, 325));
             tiles.Add(Simple(tiles, "riverside-rest", BoardTileType.Rest, "Riverside Rest"));
             tiles.Add(Property(tiles, "aster-foundry", "Aster Foundry", "industrial", 440, 44, 220, 44, 110, 220, 340));

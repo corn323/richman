@@ -1,15 +1,23 @@
 """
 Artist (藝術家) 3D Model Generator for Blender.
-Accurately implements character/artist.jpg:
-- Geometric low-poly style with crisp faceted surfaces
-- Tilted geometric beret (幾何貝雷帽) with paintbrushes tucked into the side
-- Curly volumetric brown hair framing the face, round dark-rimmed glasses
-- Navy turtleneck shirt and dark teal painter's apron with colorful paint splatters
-- Canvas messenger bag with paintbrushes sticking out
-- Left hand holds an artist palette with colorful paint dollops; right hand grips palette scepter
-- Palette scepter (多面體藝術權杖頭) with gear mechanism and rainbow spectrum shaft
-- High-top canvas sneakers with white toe caps and colorful paint marks
-- Origin at (0, 0, 0) on ground, height ~ 1.82 units
+Accurately implements character/artist.jpg based on Master Goal specifications:
+- 3D Stylized Low-Poly Character (3.5-head tall figure)
+- Crisp faceted polygonal geometry, FLAT SHADING enabled
+- Tilted dark beret hat with metallic badge and paintbrushes tucked behind the band
+- Round dark-framed spectacles with clear reflective glass lenses
+- Stylized voluminous wavy/curly brown hair framing the face, creative cheerful smile
+- Dark paint-splattered artist apron with pockets over dark charcoal turtleneck sweater
+- Bright multi-colored paint splatters across apron, sleeves, and sneakers
+- Canvas messenger shoulder bag draped across body
+- Left hand holds authentic wooden oval paint palette with colorful oil paint dollops & thumb hole
+- Right hand rests on Artistic Scepter (多面體藝術權杖頭):
+  * Bottom faceted crystal optical prism tip
+  * Rainbow chromatic spectrum bar with calibration ticks
+  * Interlocking clockwork steampunk brass/golden gears
+  * Golden/wooden artist paint palette crest at summit with paint gems
+- Slate blue-grey rolled-cuff studio trousers and paint-splattered high-top canvas sneakers
+- Pivot at (0, 0, 0) at ground center, height ~ 1.82 units
+- 100% Manifold geometry (0 non-manifold edges), outward normals, clean UVs
 - Exports to assets/models/artist.glb
 """
 
@@ -37,7 +45,7 @@ def reset_scene():
         if m.name.startswith("Art"):
             bpy.data.materials.remove(m)
 
-def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0):
+def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0, emission=None):
     if name in mats:
         return mats[name]
     mat = bpy.data.materials.new(name)
@@ -51,58 +59,83 @@ def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0):
             bsdf.inputs["Transmission Weight"].default_value = trans
         elif "Transmission" in bsdf.inputs:
             bsdf.inputs["Transmission"].default_value = trans
+    if emission is not None:
+        if "Emission Color" in bsdf.inputs:
+            bsdf.inputs["Emission Color"].default_value = tuple(emission) + (1.0,)
+            if "Emission Strength" in bsdf.inputs:
+                bsdf.inputs["Emission Strength"].default_value = 2.0
+        elif "Emission" in bsdf.inputs:
+            bsdf.inputs["Emission"].default_value = tuple(emission) + (1.0,)
     mat.diffuse_color = tuple(color) + (1.0,)
     mats[name] = mat
     return mat
 
 def setup_materials():
     # Skin & Face
-    get_or_create_mat("ArtSkin", (0.92, 0.66, 0.52), rough=0.7)
-    get_or_create_mat("ArtCheek", (0.88, 0.44, 0.38), rough=0.7)
-    get_or_create_mat("ArtNose", (0.90, 0.58, 0.46), rough=0.7)
-    get_or_create_mat("ArtLip", (0.44, 0.14, 0.16), rough=0.6)
+    get_or_create_mat("ArtSkin", (0.92, 0.68, 0.54), rough=0.7)
+    get_or_create_mat("ArtCheek", (0.88, 0.46, 0.40), rough=0.7)
+    get_or_create_mat("ArtNose", (0.90, 0.60, 0.48), rough=0.7)
+    get_or_create_mat("ArtLip", (0.48, 0.18, 0.18), rough=0.6)
     get_or_create_mat("ArtTeeth", (0.96, 0.96, 0.94), rough=0.3)
     get_or_create_mat("ArtEyeWhite", (0.95, 0.95, 0.95), rough=0.2)
-    get_or_create_mat("ArtEyeGreen", (0.12, 0.55, 0.42), rough=0.2)
-    get_or_create_mat("ArtPupil", (0.03, 0.03, 0.04), rough=0.2)
+    get_or_create_mat("ArtEyeGreen", (0.15, 0.65, 0.45), rough=0.2)
+    get_or_create_mat("ArtPupil", (0.04, 0.04, 0.05), rough=0.2)
+    get_or_create_mat("ArtHairBrown", (0.34, 0.20, 0.12), rough=0.75)
     
-    # Hair & Eyebrows (Warm wavy brown)
-    get_or_create_mat("ArtHairBrown", (0.38, 0.22, 0.12), rough=0.75)
-    
-    # Clothing (Navy turtleneck, teal/navy apron, faded blue denim pants)
-    get_or_create_mat("ArtTurtleDark", (0.08, 0.09, 0.13), rough=0.75)
-    get_or_create_mat("ArtShirtNavy", (0.14, 0.18, 0.28), rough=0.75)
-    get_or_create_mat("ArtApronTeal", (0.12, 0.20, 0.30), rough=0.75)
-    get_or_create_mat("ArtApronPocket", (0.09, 0.14, 0.22), rough=0.75)
-    get_or_create_mat("ArtPantsDenim", (0.22, 0.30, 0.40), rough=0.75)
-    
-    # Beret (Dark slate navy with wine red trim)
-    get_or_create_mat("ArtBeretNavy", (0.12, 0.15, 0.24), rough=0.75)
-    get_or_create_mat("ArtBeretBand", (0.35, 0.08, 0.14), rough=0.75)
-    
-    # Paint Splatter Colors (Red, Orange, Yellow, Green, Cyan, Blue, Purple)
-    get_or_create_mat("ArtPaintRed", (0.85, 0.14, 0.14), rough=0.4)
-    get_or_create_mat("ArtPaintOrange", (0.95, 0.50, 0.10), rough=0.4)
-    get_or_create_mat("ArtPaintYellow", (0.95, 0.85, 0.12), rough=0.4)
-    get_or_create_mat("ArtPaintGreen", (0.15, 0.70, 0.25), rough=0.4)
-    get_or_create_mat("ArtPaintCyan", (0.10, 0.75, 0.85), rough=0.4)
-    get_or_create_mat("ArtPaintBlue", (0.12, 0.38, 0.88), rough=0.4)
-    get_or_create_mat("ArtPaintPurple", (0.55, 0.18, 0.75), rough=0.4)
-    
-    # Gear, Palette & Shoes
-    get_or_create_mat("ArtCanvasBag", (0.72, 0.64, 0.50), rough=0.7)
-    get_or_create_mat("ArtPaletteWood", (0.75, 0.55, 0.34), rough=0.5)
-    get_or_create_mat("ArtBrushWood", (0.45, 0.28, 0.14), rough=0.6)
-    get_or_create_mat("ArtBrushMetal", (0.65, 0.68, 0.72), metal=0.8, rough=0.3)
-    get_or_create_mat("ArtSneakerCanvas", (0.16, 0.18, 0.24), rough=0.7)
-    get_or_create_mat("ArtSneakerWhite", (0.88, 0.88, 0.86), rough=0.6)
-    get_or_create_mat("ArtSneakerSole", (0.10, 0.10, 0.10), rough=0.85)
-    
-    # Scepter metals
-    get_or_create_mat("ArtGold", (0.95, 0.76, 0.16), metal=0.92, rough=0.20)
-    get_or_create_mat("ArtBrass", (0.85, 0.65, 0.18), metal=0.85, rough=0.28)
-    get_or_create_mat("ArtGlass", (0.85, 0.95, 1.0), metal=0.0, rough=0.1, trans=0.85)
-    get_or_create_mat("ArtBlack", (0.04, 0.04, 0.05), rough=0.5)
+    # Round Glasses
+    get_or_create_mat("ArtGlassFrame", (0.14, 0.16, 0.18), rough=0.4)
+    get_or_create_mat("ArtGlassLens", (0.20, 0.85, 0.95), rough=0.1, trans=0.82)
+
+    # Tilted Beret & Paintbrushes
+    get_or_create_mat("ArtBeretNavy", (0.16, 0.20, 0.28), rough=0.7)
+    get_or_create_mat("ArtBeretDark", (0.10, 0.14, 0.20), rough=0.75)
+    get_or_create_mat("ArtBadgeGold", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+    get_or_create_mat("ArtBadgeGreen", (0.20, 0.75, 0.35), rough=0.4)
+    get_or_create_mat("ArtBrushWood", (0.48, 0.30, 0.16), rough=0.65)
+    get_or_create_mat("ArtBrushSilver", (0.75, 0.77, 0.80), metal=0.9, rough=0.25)
+    get_or_create_mat("ArtBrushTipRed", (0.85, 0.20, 0.20), rough=0.5)
+    get_or_create_mat("ArtBrushTipCyan", (0.18, 0.70, 0.85), rough=0.5)
+
+    # Clothing: Paint-Splattered Apron & Turtleneck Sweater
+    get_or_create_mat("ArtApronDark", (0.16, 0.22, 0.28), rough=0.7)
+    get_or_create_mat("ArtPocketDark", (0.12, 0.16, 0.22), rough=0.75)
+    get_or_create_mat("ArtSweaterCharcoal", (0.14, 0.16, 0.20), rough=0.8)
+    get_or_create_mat("ArtPantsSlate", (0.24, 0.30, 0.36), rough=0.75)
+    get_or_create_mat("ArtPantsCuff", (0.20, 0.25, 0.30), rough=0.8)
+
+    # Paint Splatter Color Blocks
+    get_or_create_mat("ArtSplatterRed", (0.92, 0.20, 0.20), rough=0.4)
+    get_or_create_mat("ArtSplatterYellow", (0.96, 0.85, 0.15), rough=0.4)
+    get_or_create_mat("ArtSplatterCyan", (0.18, 0.82, 0.95), rough=0.4)
+    get_or_create_mat("ArtSplatterGreen", (0.20, 0.80, 0.30), rough=0.4)
+    get_or_create_mat("ArtSplatterPurple", (0.65, 0.20, 0.80), rough=0.4)
+    get_or_create_mat("ArtSplatterOrange", (0.96, 0.50, 0.12), rough=0.4)
+    get_or_create_mat("ArtSplatterWhite", (0.94, 0.94, 0.94), rough=0.4)
+
+    # Canvas Sneakers
+    get_or_create_mat("ArtSneakerDark", (0.16, 0.18, 0.22), rough=0.7)
+    get_or_create_mat("ArtSneakerWhite", (0.92, 0.92, 0.90), rough=0.7)
+    get_or_create_mat("ArtSneakerSole", (0.86, 0.86, 0.84), rough=0.8)
+
+    # Messenger Canvas Bag
+    get_or_create_mat("ArtBagCanvas", (0.70, 0.64, 0.52), rough=0.7)
+    get_or_create_mat("ArtBagStrap", (0.58, 0.52, 0.40), rough=0.75)
+
+    # Handheld Wooden Paint Palette
+    get_or_create_mat("ArtPaletteWood", (0.68, 0.46, 0.28), rough=0.6)
+    get_or_create_mat("ArtPaletteDark", (0.48, 0.30, 0.16), rough=0.65)
+
+    # Artistic Scepter
+    get_or_create_mat("ArtScepterGold", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+    get_or_create_mat("ArtScepterBrass", (0.85, 0.65, 0.18), metal=0.85, rough=0.28)
+    get_or_create_mat("ArtPrismPoint", (0.45, 0.20, 0.65), metal=0.3, rough=0.2)
+    get_or_create_mat("ArtSpecRed", (0.95, 0.18, 0.18), rough=0.3)
+    get_or_create_mat("ArtSpecOrange", (0.98, 0.48, 0.08), rough=0.3)
+    get_or_create_mat("ArtSpecYellow", (0.98, 0.88, 0.10), rough=0.3)
+    get_or_create_mat("ArtSpecGreen", (0.18, 0.85, 0.28), rough=0.3)
+    get_or_create_mat("ArtSpecCyan", (0.15, 0.88, 0.98), rough=0.3)
+    get_or_create_mat("ArtSpecBlue", (0.12, 0.35, 0.95), rough=0.3)
+    get_or_create_mat("ArtSpecPurple", (0.65, 0.15, 0.85), rough=0.3)
 
 def register_part(obj, mat_name):
     if mat_name in mats:
@@ -112,14 +145,6 @@ def register_part(obj, mat_name):
             obj.data.materials[0] = mats[mat_name]
     parts.append(obj)
     return obj
-
-def add_mesh_obj(name, bm, mat_name):
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    obj = bpy.data.objects.new(name, me)
-    bpy.context.collection.objects.link(obj)
-    return register_part(obj, mat_name)
 
 def box(name, mat_name, loc, size, rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_cube_add(size=1)
@@ -169,335 +194,293 @@ def tube(name, mat_name, p1, p2, r, segments=6, r2=None):
     obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
     return register_part(obj, mat_name)
 
-def slab(name, mat_name, p1, p2, width, thickness):
-    p1 = Vector(p1)
-    p2 = Vector(p2)
-    delta = p2 - p1
-    length = delta.length
-    if length < 1e-5:
-        length = 1e-4
-    bpy.ops.mesh.primitive_cube_add(size=1)
-    obj = bpy.context.object
-    obj.name = name
-    obj.location = (p1 + p2) / 2
-    obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
-    obj.scale = (width, thickness, length)
-    return register_part(obj, mat_name)
-
-def loft(name, mat_name, rings, n=8):
-    bm = bmesh.new()
-    ring_verts = []
-    for z, rx, ry, cy in rings:
-        rv = []
-        for k in range(n):
-            angle = math.pi / n + 2 * math.pi * k / n
-            x = rx * math.cos(angle)
-            y = cy + ry * math.sin(angle)
-            rv.append(bm.verts.new((x, y, z)))
-        ring_verts.append(rv)
-    bm.verts.ensure_lookup_table()
-    for i in range(len(ring_verts) - 1):
-        for k in range(n):
-            v1 = ring_verts[i][k]
-            v2 = ring_verts[i][(k + 1) % n]
-            v3 = ring_verts[i + 1][(k + 1) % n]
-            v4 = ring_verts[i + 1][k]
-            bm.faces.new((v1, v2, v3, v4))
-    bm.faces.new(ring_verts[0][::-1])
-    bm.faces.new(ring_verts[-1])
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return add_mesh_obj(name, bm, mat_name)
-
 
 # -------------------------------------------------------------
-# BUILDER FUNCTIONS
+# 1. LEGS, ROLLED STUDIO TROUSERS & CANVAS SNEAKERS
 # -------------------------------------------------------------
 
 def build_legs_and_sneakers():
-    for s in (-1, 1):
-        x = s * 0.13
-        # Casual rolled denim trousers
-        leg_rings = [
-            (0.18, 0.092, 0.092, 0.0),
-            (0.35, 0.098, 0.098, 0.0),
-            (0.55, 0.115, 0.115, 0.0)
-        ]
-        l = loft(f"Leg_{s}", "ArtPantsDenim", leg_rings, n=8)
-        l.location.x = x
-        
+    for side, sx in [("L", -0.165), ("R", 0.165)]:
+        # Studio trousers thigh & calf
+        cylinder(f"LegThigh_{side}", "ArtPantsSlate", (sx, 0.0, 0.44), 0.13, 0.32, segments=8)
+        cylinder(f"LegCalf_{side}", "ArtPantsSlate", (sx, 0.01, 0.28), 0.12, 0.14, segments=8)
         # Rolled cuff at ankle
-        torus(f"PantsCuff_{s}", "ArtPantsDenim", (x, 0.0, 0.18), 0.095, 0.016, seg_major=8, seg_minor=4)
-        
-        # High-top canvas sneakers with white toe cap and laces
-        # Canvas body
-        icosphere(f"SneakerUpper_{s}", "ArtSneakerCanvas", (x, -0.05, 0.072), 0.105, scale=(0.95, 1.65, 0.75), subdivisions=1)
-        # White rubber toe cap
-        icosphere(f"SneakerToe_{s}", "ArtSneakerWhite", (x, -0.125, 0.048), 0.068, scale=(1.05, 1.1, 0.65), subdivisions=1)
-        # White foxing sole
-        box(f"SneakerFoxing_{s}", "ArtSneakerWhite", (x, -0.04, 0.024), (0.19, 0.36, 0.032))
-        box(f"SneakerSole_{s}", "ArtSneakerSole", (x, -0.04, 0.008), (0.195, 0.365, 0.016))
-        # Sneaker paint splatter dots
-        icosphere(f"SneakPaint_{s}_1", "ArtPaintRed", (x - 0.06, -0.05, 0.06), 0.014, subdivisions=1)
-        icosphere(f"SneakPaint_{s}_2", "ArtPaintCyan", (x + 0.06, -0.02, 0.08), 0.014, subdivisions=1)
+        cylinder(f"TrouserCuff_{side}", "ArtPantsCuff", (sx, 0.0, 0.18), 0.122, 0.05, segments=8)
 
+        # High-top Canvas Sneaker Shaft
+        cylinder(f"SneakerShaft_{side}", "ArtSneakerDark", (sx, 0.0, 0.14), 0.108, 0.12, segments=8)
+        
+        # Sneaker Foot & White Rubber Toe Cap
+        box(f"SneakerFoot_{side}", "ArtSneakerDark", (sx, -0.06, 0.075), (0.20, 0.28, 0.12))
+        box(f"SneakerToe_{side}", "ArtSneakerWhite", (sx, -0.165, 0.065), (0.18, 0.09, 0.10))
+        
+        # Rubber Midsole & Tread
+        box(f"SneakerMidSole_{side}", "ArtSneakerSole", (sx, -0.06, 0.025), (0.22, 0.31, 0.035))
+        box(f"SneakerTread_{side}", "ArtSneakerDark", (sx, -0.06, 0.010), (0.23, 0.32, 0.02))
+        
+        # White Laces & Tongue
+        box(f"SneakerLace_{side}", "ArtSneakerWhite", (sx, -0.09, 0.125), (0.12, 0.10, 0.025))
+
+        # Paint splatters on sneakers
+        box(f"ShoeSplat1_{side}", "ArtSplatterYellow", (sx - 0.06, -0.10, 0.06), (0.02, 0.02, 0.02), rot=(0.2, 0.1, 0.3))
+        box(f"ShoeSplat2_{side}", "ArtSplatterCyan", (sx + 0.05, -0.04, 0.07), (0.02, 0.02, 0.02), rot=(0.1, 0.4, 0.2))
+
+
+# -------------------------------------------------------------
+# 2. TORSO, TURTLENECK SWEATER & PAINT-SPLATTERED APRON
+# -------------------------------------------------------------
 
 def build_torso_and_apron():
-    # 1. Torso Base (Navy shirt & Dark Turtleneck)
-    shirt_rings = [
-        (0.44, 0.35, 0.28, 0.0),
-        (0.58, 0.38, 0.31, -0.01),
-        (0.76, 0.41, 0.33, -0.02),
-        (0.96, 0.42, 0.34, -0.02),
-        (1.10, 0.38, 0.30, -0.01),
-        (1.20, 0.30, 0.22, 0.0),
-        (1.26, 0.16, 0.13, 0.0)
-    ]
-    loft("ShirtTorsoMain", "ArtShirtNavy", shirt_rings, n=12)
+    # Pelvis & Apron Lower Skirt
+    cylinder("Pelvis", "ArtApronDark", (0.0, 0.0, 0.58), 0.27, 0.18, segments=10)
     
-    # Turtleneck collar
-    cylinder("Turtleneck", "ArtTurtleDark", (0.0, -0.01, 1.25), 0.12, 0.08, segments=8)
+    # Waist Belt / Apron Tie Band
+    cylinder("ApronTieBand", "ArtPocketDark", (0.0, 0.0, 0.67), 0.28, 0.07, segments=12)
+    # Tie knot on back
+    box("ApronBowBack", "ArtPocketDark", (0.0, 0.28, 0.67), (0.10, 0.04, 0.05))
+
+    # Torso (Turtleneck Base + Apron Body)
+    cylinder("TorsoWaist", "ArtApronDark", (0.0, -0.01, 0.84), 0.285, 0.32, segments=10, r2=0.28)
+    cylinder("TorsoChest", "ArtApronDark", (0.0, -0.02, 1.08), 0.28, 0.26, segments=10, r2=0.25)
     
-    # 2. Painter's Apron (Teal/Navy apron front and bib)
-    apron_bm = bmesh.new()
-    apron_levels = [
-        (0.48, 0.34, -0.30),
-        (0.66, 0.38, -0.335),
-        (0.86, 0.38, -0.35),
-        (1.05, 0.32, -0.33),
-        (1.18, 0.22, -0.27)
-    ]
-    apron_rows = []
-    for z, w, y in apron_levels:
-        p_row = [
-            apron_bm.verts.new((-w * 0.5, y + 0.03, z)),
-            apron_bm.verts.new((-w * 0.28, y + 0.01, z)),
-            apron_bm.verts.new((0.0, y, z)),
-            apron_bm.verts.new((w * 0.28, y + 0.01, z)),
-            apron_bm.verts.new((w * 0.5, y + 0.03, z))
-        ]
-        apron_rows.append(p_row)
-    apron_bm.verts.ensure_lookup_table()
+    # Dark Turtleneck Collar in Neck Opening
+    cylinder("TurtleneckCollar", "ArtSweaterCharcoal", (0.0, -0.01, 1.25), 0.12, 0.10, segments=8)
     
-    for i in range(len(apron_rows) - 1):
-        for j in range(4):
-            v1 = apron_rows[i][j]
-            v2 = apron_rows[i][j + 1]
-            v3 = apron_rows[i + 1][j + 1]
-            v4 = apron_rows[i + 1][j]
-            apron_bm.faces.new((v1, v2, v3, v4))
-            
-    bmesh.ops.recalc_face_normals(apron_bm, faces=apron_bm.faces)
-    apron_obj = add_mesh_obj("ApronFront", apron_bm, "ArtApronTeal")
-    
-    mod = apron_obj.modifiers.new(name="ApronSolidify", type='SOLIDIFY')
-    mod.thickness = 0.02
-    bpy.context.view_layer.objects.active = apron_obj
-    bpy.ops.object.modifier_apply(modifier="ApronSolidify")
-    
-    # Apron neck straps & waist tie
-    slab("ApronStrap_L", "ArtApronPocket", (0.10, -0.25, 1.22), (0.11, -0.10, 1.25), 0.035, 0.015)
-    slab("ApronStrap_R", "ArtApronPocket", (-0.10, -0.25, 1.22), (-0.11, -0.10, 1.25), 0.035, 0.015)
-    # Front large patch pockets on apron
-    box("ApronPocket1", "ArtApronPocket", (0.0, -0.36, 0.94), (0.16, 0.03, 0.14))
-    box("ApronPocket2", "ArtApronPocket", (0.16, -0.34, 0.65), (0.11, 0.03, 0.10))
-    
-    # 3. Colorful Paint Splatters on the apron! (Distinct geometric faceted splotches)
+    # Front Apron Bib / Panel
+    box("ApronBib", "ArtApronDark", (0.0, -0.25, 0.96), (0.24, 0.06, 0.38))
+    # Apron Shoulder Straps
+    tube("ApronStrap_L", "ArtPocketDark", (-0.12, -0.24, 1.15), (-0.14, 0.16, 1.18), 0.020, segments=4)
+    tube("ApronStrap_R", "ArtPocketDark", (0.12, -0.24, 1.15), (0.14, 0.16, 1.18), 0.020, segments=4)
+
+    # Apron Front Pockets (with tucked pencils/brushes)
+    box("ApronPocket_L", "ArtPocketDark", (-0.12, -0.28, 0.78), (0.10, 0.03, 0.11))
+    box("ApronPocket_R", "ArtPocketDark", (0.12, -0.28, 0.78), (0.10, 0.03, 0.11))
+    tube("PocketPencil1", "ArtBrushWood", (-0.10, -0.29, 0.88), (-0.08, -0.28, 0.74), 0.008, segments=4)
+    tube("PocketBrush1", "ArtBrushWood", (0.10, -0.29, 0.89), (0.08, -0.28, 0.74), 0.008, segments=4)
+
+    # --- COLORFUL GEOMETRIC PAINT SPLATTERS ON APRON ---
     splatters = [
-        ("ArtPaintRed", -0.12, 0.72, 0.045),
-        ("ArtPaintYellow", 0.08, 0.76, 0.042),
-        ("ArtPaintBlue", -0.18, 0.90, 0.048),
-        ("ArtPaintGreen", 0.14, 0.56, 0.045),
-        ("ArtPaintOrange", -0.06, 0.62, 0.040),
-        ("ArtPaintPurple", 0.11, 1.08, 0.042),
-        ("ArtPaintCyan", -0.08, 1.02, 0.038),
-        ("ArtPaintYellow", 0.04, 0.88, 0.035),
-        ("ArtPaintRed", 0.17, 0.92, 0.042),
-        ("ArtPaintGreen", -0.14, 0.80, 0.040),
+        ("Splat_Red1", "ArtSplatterRed", (-0.06, -0.285, 0.98), (0.035, 0.012, 0.035), (0.2, 0.1, 0.4)),
+        ("Splat_Yel1", "ArtSplatterYellow", (0.07, -0.285, 1.04), (0.040, 0.012, 0.030), (-0.1, 0.3, -0.2)),
+        ("Splat_Cyan1", "ArtSplatterCyan", (-0.08, -0.285, 0.72), (0.035, 0.012, 0.040), (0.3, -0.2, 0.1)),
+        ("Splat_Grn1", "ArtSplatterGreen", (0.04, -0.285, 0.86), (0.030, 0.012, 0.030), (0.1, 0.2, 0.3)),
+        ("Splat_Pur1", "ArtSplatterPurple", (-0.02, -0.285, 1.12), (0.028, 0.012, 0.028), (-0.2, 0.1, 0.5)),
+        ("Splat_Orn1", "ArtSplatterOrange", (0.09, -0.285, 0.74), (0.035, 0.012, 0.035), (0.2, 0.3, -0.1)),
+        ("Splat_Wht1", "ArtSplatterWhite", (-0.03, -0.285, 0.65), (0.025, 0.012, 0.025), (0.1, -0.1, 0.2)),
     ]
-    for i, (c, x, z, s) in enumerate(splatters):
-        box(f"PaintSplat_{i}", c, (x, -0.365, z), (s, 0.015, s), rot=(0.1, 0, 0.4 * i))
-        
-    # 4. Canvas Messenger Satchel on hip with brushes
-    slab("MessengerStrap", "ArtCanvasBag", (0.28, -0.16, 1.24), (-0.30, -0.26, 0.60), 0.055, 0.02)
-    box("MessengerBag", "ArtCanvasBag", (-0.32, -0.15, 0.60), (0.20, 0.14, 0.20), rot=(0, 0, 0.26))
-    # Brushes sticking out of satchel
-    tube("BagBrush1", "ArtBrushWood", (-0.30, -0.16, 0.68), (-0.28, -0.22, 0.84), 0.010, 4)
-    cylinder("BagBrushTip1", "ArtPaintRed", (-0.28, -0.22, 0.84), 0.014, 0.03, segments=4)
-    tube("BagBrush2", "ArtBrushWood", (-0.34, -0.15, 0.68), (-0.36, -0.20, 0.82), 0.010, 4)
-    cylinder("BagBrushTip2", "ArtPaintCyan", (-0.36, -0.20, 0.82), 0.014, 0.03, segments=4)
+    for name, mat, loc, size, rot in splatters:
+        box(name, mat, loc, size, rot=rot)
 
 
-def build_arms_and_hands():
-    arm_r = 0.088
+# -------------------------------------------------------------
+# 3. CANVAS MESSENGER SHOULDER BAG
+# -------------------------------------------------------------
+
+def build_messenger_bag():
+    # Diagonal Canvas Strap from right shoulder to left hip
+    tube("BagStrap", "ArtBagStrap", (0.22, -0.22, 1.20), (-0.26, 0.12, 0.66), 0.022, segments=4)
+    cylinder("BagBuckle", "ArtBadgeGold", (-0.02, -0.24, 0.95), 0.030, 0.015, segments=6, rot=(0.4, 0.8, 0))
+
+    # Canvas Messenger Bag at left hip
+    box("CanvasBagBody", "ArtBagCanvas", (-0.28, -0.04, 0.65), (0.10, 0.22, 0.18), rot=(0, 0, 0.25))
+    box("CanvasBagFlap", "ArtBagStrap", (-0.285, -0.04, 0.73), (0.105, 0.225, 0.04), rot=(0, 0, 0.25))
+    # Brushes peeking out of bag
+    tube("BagBrush1", "ArtBrushWood", (-0.28, -0.06, 0.82), (-0.28, -0.06, 0.68), 0.010, segments=4)
+    cylinder("BagBrushTip1", "ArtBrushTipRed", (-0.28, -0.06, 0.84), 0.010, 0.025, segments=6)
+
+
+# -------------------------------------------------------------
+# 4. ARMS, HANDS, WOODEN PALETTE & SCEPTER GRIP
+# -------------------------------------------------------------
+
+def build_arms_and_palette():
+    # --- RIGHT ARM (Resting on Palette Scepter) ---
+    r_sh = (0.34, -0.02, 1.14)
+    icosphere("Shoulder_R", "ArtApronDark", r_sh, 0.12, subdivisions=1)
+    # Upper arm in dark turtleneck
+    tube("UpperArm_R", "ArtSweaterCharcoal", r_sh, (0.46, -0.05, 0.94), 0.085, segments=8)
+    icosphere("Elbow_R", "ArtSweaterCharcoal", (0.46, -0.05, 0.94), 0.082, subdivisions=1)
+    # Forearm extending to rest on staff
+    tube("Forearm_R", "ArtSweaterCharcoal", (0.46, -0.05, 0.94), (0.48, -0.22, 0.86), 0.078, segments=8)
+    cylinder("SleeveCuff_R", "ArtApronDark", (0.48, -0.22, 0.86), 0.082, 0.04, segments=8)
+    # Right Hand resting on scepter head
+    icosphere("Hand_R", "ArtSkin", (0.49, -0.25, 0.84), 0.072, scale=(1.0, 1.1, 0.9), subdivisions=1)
+    box("Thumb_R", "ArtSkin", (0.45, -0.23, 0.85), (0.028, 0.04, 0.028), rot=(0.2, 0.2, 0.3))
+    box("Fingers_R", "ArtSkin", (0.50, -0.26, 0.83), (0.065, 0.04, 0.065), rot=(0, 0.2, 0.2))
+
+    # --- LEFT ARM (Holding Wooden Artist Palette) ---
+    l_sh = (-0.34, -0.02, 1.14)
+    icosphere("Shoulder_L", "ArtApronDark", l_sh, 0.12, subdivisions=1)
+    # Upper arm
+    tube("UpperArm_L", "ArtSweaterCharcoal", l_sh, (-0.46, -0.08, 0.95), 0.085, segments=8)
+    icosphere("Elbow_L", "ArtSweaterCharcoal", (-0.46, -0.08, 0.95), 0.082, subdivisions=1)
+    # Forearm bent forward holding palette
+    tube("Forearm_L", "ArtSweaterCharcoal", (-0.46, -0.08, 0.95), (-0.32, -0.26, 0.90), 0.078, segments=8)
+    cylinder("SleeveCuff_L", "ArtApronDark", (-0.32, -0.26, 0.90), 0.082, 0.04, segments=8)
+    # Left Hand gripping palette through thumb hole
+    icosphere("Hand_L", "ArtSkin", (-0.28, -0.32, 0.90), 0.072, scale=(1.0, 1.1, 0.9), subdivisions=1)
+    box("Thumb_L", "ArtSkin", (-0.25, -0.32, 0.92), (0.028, 0.04, 0.028), rot=(0.2, -0.2, -0.3))
+
+    # --- WOODEN ARTIST PAINT PALETTE (精緻木製調色盤) ---
+    pal_pos = (-0.26, -0.38, 0.92)
+    pal_rot = (0.28, 0.35, -0.15)
+    # Oval shaped wooden palette board
+    cylinder("PaletteBoard", "ArtPaletteWood", pal_pos, 0.14, 0.015, segments=12, rot=pal_rot)
+    # Thumb hole cutout
+    cylinder("ThumbHoleRim", "ArtPaletteDark", (pal_pos[0] + 0.05, pal_pos[1] + 0.02, pal_pos[2]), 0.032, 0.018, segments=8, rot=pal_rot)
     
-    # ------------------ RIGHT ARM (Holding Palette Scepter) ------------------
-    sh_r = (-0.38, 0.0, 1.15)
-    elbow_r = (-0.46, -0.06, 0.92)
-    wrist_r = (-0.44, -0.15, 0.80)
-    
-    icosphere("Shoulder_R", "ArtShirtNavy", sh_r, 0.115, subdivisions=1)
-    tube("UpperArm_R", "ArtShirtNavy", sh_r, elbow_r, arm_r, segments=8)
-    icosphere("Elbow_R", "ArtShirtNavy", elbow_r, 0.09, subdivisions=1)
-    tube("ForeArm_R", "ArtShirtNavy", elbow_r, wrist_r, arm_r - 0.005, segments=8)
-    # Rolled up sleeve cuff
-    torus("RolledCuff_R", "ArtApronPocket", wrist_r, 0.086, 0.016, seg_major=8, seg_minor=4)
-    
-    # Right hand gripping palette scepter
-    icosphere("Hand_R_Palm", "ArtSkin", (-0.44, -0.16, 1.12), 0.065, scale=(1.1, 1.1, 0.65), subdivisions=1)
-    icosphere("Hand_R_Thumb", "ArtSkin", (-0.39, -0.14, 1.08), 0.030, scale=(1.2, 0.8, 0.8), subdivisions=1)
-    for i, dx in enumerate((-0.032, 0.0, 0.032)):
-        icosphere(f"Hand_R_Finger_{i}", "ArtSkin", (-0.44 + dx, -0.21, 1.07), 0.025, scale=(0.8, 1.2, 0.8), subdivisions=1)
-        
-    # ------------------ LEFT ARM (Holding Artist Palette) ------------------
-    sh_l = (0.38, 0.0, 1.15)
-    elbow_l = (0.47, -0.07, 0.90)
-    wrist_l = (0.34, -0.22, 0.82)
-    
-    icosphere("Shoulder_L", "ArtShirtNavy", sh_l, 0.115, subdivisions=1)
-    tube("UpperArm_L", "ArtShirtNavy", sh_l, elbow_l, arm_r, segments=8)
-    icosphere("Elbow_L", "ArtShirtNavy", elbow_l, 0.09, subdivisions=1)
-    tube("ForeArm_L", "ArtShirtNavy", elbow_l, wrist_l, arm_r - 0.005, segments=8)
-    torus("RolledCuff_L", "ArtApronPocket", wrist_l, 0.086, 0.016, seg_major=8, seg_minor=4)
-    
-    # Left hand supporting artist palette
-    icosphere("Hand_L_Palm", "ArtSkin", (0.26, -0.26, 0.80), 0.055, scale=(1.1, 1.1, 0.7), subdivisions=1)
-    icosphere("Hand_L_Thumb", "ArtSkin", (0.24, -0.23, 0.84), 0.026, subdivisions=1)
-    
-    # Artist Palette in left hand
-    pal_x, pal_y, pal_z = 0.22, -0.32, 0.84
-    cylinder("HandPalette", "ArtPaletteWood", (pal_x, pal_y, pal_z), 0.16, 0.022, segments=12, rot=(0.2, 0.1, -0.2))
-    # Thumb hole
-    cylinder("HandPalHole", "ArtBlack", (pal_x + 0.06, pal_y - 0.02, pal_z + 0.01), 0.028, 0.025, segments=8, rot=(0.2, 0.1, -0.2))
-    # Colorful paint dollops on hand palette
-    pal_paints = [
-        ("ArtPaintRed", -0.08, 0.06, 0.025),
-        ("ArtPaintBlue", -0.02, 0.10, 0.025),
-        ("ArtPaintYellow", 0.07, 0.07, 0.025),
-        ("ArtPaintGreen", -0.09, -0.04, 0.025),
-        ("ArtPaintPurple", 0.08, -0.02, 0.025),
+    # Colorful oil paint dollops arranged around palette periphery
+    paint_dollops = [
+        ("DollopRed", "ArtSplatterRed", (pal_pos[0] - 0.08, pal_pos[1] - 0.04, pal_pos[2] + 0.03)),
+        ("DollopOrange", "ArtSplatterOrange", (pal_pos[0] - 0.09, pal_pos[1], pal_pos[2] + 0.05)),
+        ("DollopYellow", "ArtSplatterYellow", (pal_pos[0] - 0.06, pal_pos[1] + 0.05, pal_pos[2] + 0.07)),
+        ("DollopGreen", "ArtSplatterGreen", (pal_pos[0], pal_pos[1] + 0.06, pal_pos[2] + 0.07)),
+        ("DollopCyan", "ArtSplatterCyan", (pal_pos[0] + 0.05, pal_pos[1] + 0.04, pal_pos[2] + 0.05)),
+        ("DollopPurple", "ArtSplatterPurple", (pal_pos[0] - 0.03, pal_pos[1] - 0.07, pal_pos[2] + 0.01)),
+        ("DollopWhite", "ArtSplatterWhite", (pal_pos[0] + 0.02, pal_pos[1] - 0.06, pal_pos[2] + 0.01)),
     ]
-    for i, (c, dx, dy, r) in enumerate(pal_paints):
-        cylinder(f"HandPalPaint_{i}", c, (pal_x + dx, pal_y + dy, pal_z + 0.02), r, 0.015, segments=8, rot=(0.2, 0.1, -0.2))
+    for dname, dmat, dloc in paint_dollops:
+        icosphere(dname, dmat, dloc, 0.020, scale=(1.0, 1.0, 0.6), subdivisions=1, rot=pal_rot)
 
 
-def build_head_and_face():
-    head_center = (0.0, -0.03, 1.45)
-    icosphere("HeadBase", "ArtSkin", head_center, 0.225, scale=(1.10, 1.02, 1.02), subdivisions=2)
+# -------------------------------------------------------------
+# 5. HEAD, WAVY CURLY HAIR, ROUND GLASSES & BERET
+# -------------------------------------------------------------
+
+def build_head_and_beret():
+    # Neck
+    cylinder("Neck", "ArtSkin", (0.0, -0.01, 1.28), 0.10, 0.12, segments=8)
     
+    # Base Cranium
+    icosphere("HeadBase", "ArtSkin", (0.0, 0.0, 1.48), 0.23, scale=(1.12, 1.0, 1.04), subdivisions=2)
+    # Nose
+    box("NoseBridge", "ArtNose", (0.0, -0.225, 1.46), (0.042, 0.05, 0.068), rot=(0.2, 0, 0))
+    icosphere("NoseTip", "ArtNose", (0.0, -0.245, 1.43), 0.038, scale=(1.1, 0.9, 0.9), subdivisions=1)
+    
+    # Cheerful expressive cheeks & smile
     for s in (-1, 1):
-        icosphere(f"CheekVol_{s}", "ArtSkin", (s * 0.14, -0.13, 1.40), 0.10, scale=(1.0, 0.9, 0.9), subdivisions=1)
-        icosphere(f"CheekBlush_{s}", "ArtCheek", (s * 0.135, -0.185, 1.40), 0.055, scale=(1.1, 0.5, 0.9), subdivisions=1)
-        icosphere(f"Ear_{s}", "ArtSkin", (s * 0.25, -0.02, 1.45), 0.055, scale=(0.45, 0.9, 1.2), subdivisions=1)
-        
-    icosphere("Nose", "ArtNose", (0.0, -0.235, 1.42), 0.055, scale=(1.05, 0.95, 1.0), subdivisions=1)
-    
-    # Expressive green artist eyes
+        icosphere(f"Cheek_{s}", "ArtCheek", (s * 0.12, -0.18, 1.41), 0.056, scale=(1.0, 0.6, 0.9), subdivisions=1)
+        icosphere(f"Ear_{s}", "ArtSkin", (s * 0.25, 0.01, 1.47), 0.045, scale=(0.5, 0.9, 1.2), subdivisions=1)
+        # Eyes
+        box(f"EyeWhite_{s}", "ArtEyeWhite", (s * 0.09, -0.205, 1.51), (0.055, 0.02, 0.035))
+        box(f"EyeIris_{s}", "ArtEyeGreen", (s * 0.09, -0.218, 1.51), (0.032, 0.01, 0.032))
+        box(f"EyePupil_{s}", "ArtPupil", (s * 0.09, -0.225, 1.51), (0.016, 0.008, 0.016))
+        # Eyebrows
+        box(f"Eyebrow_{s}", "ArtHairBrown", (s * 0.095, -0.21, 1.56), (0.075, 0.03, 0.025), rot=(0, 0, s * 0.12))
+
+    # Cheerful Creative Smile showing white teeth
+    box("MouthCavity", "ArtLip", (0.0, -0.22, 1.34), (0.09, 0.02, 0.032))
+    box("TeethUpper", "ArtTeeth", (0.0, -0.226, 1.352), (0.078, 0.015, 0.015))
+
+    # Voluminous Wavy / Curly Brown Hair Framing Face
+    icosphere("HairBack", "ArtHairBrown", (0.0, 0.09, 1.47), 0.22, scale=(1.15, 0.95, 0.9), subdivisions=1)
     for s in (-1, 1):
-        eye_x = s * 0.090
-        eye_y = -0.21
-        eye_z = 1.495
-        icosphere(f"EyeWhite_{s}", "ArtEyeWhite", (eye_x, eye_y, eye_z), 0.046, scale=(1.05, 0.55, 1.0), subdivisions=1)
-        icosphere(f"EyeIris_{s}", "ArtEyeGreen", (eye_x, eye_y - 0.024, eye_z), 0.026, scale=(1.0, 0.5, 1.0), subdivisions=1)
-        icosphere(f"EyePupil_{s}", "ArtPupil", (eye_x, eye_y - 0.035, eye_z), 0.013, scale=(1.0, 0.5, 1.0), subdivisions=1)
-        slab(f"Eyebrow_{s}", "ArtHairBrown", (s * 0.045, -0.225, 1.565), (s * 0.15, -0.20, 1.575), 0.042, 0.025)
-        
-    # Round Artist Glasses
+        # Curly hair tufts on temples and cheeks
+        icosphere(f"HairCurl1_{s}", "ArtHairBrown", (s * 0.22, -0.05, 1.46), 0.10, scale=(0.8, 1.1, 1.1), subdivisions=1)
+        icosphere(f"HairCurl2_{s}", "ArtHairBrown", (s * 0.21, 0.04, 1.38), 0.09, scale=(0.8, 1.1, 1.1), subdivisions=1)
+        icosphere(f"HairCurl3_{s}", "ArtHairBrown", (s * 0.14, -0.16, 1.36), 0.075, scale=(1.0, 0.8, 0.9), subdivisions=1)
+
+    # Round Dark-Framed Spectacles
     for s in (-1, 1):
-        gx = s * 0.090
-        torus(f"GlassRim_{s}", "ArtBlack", (gx, -0.255, 1.495), 0.056, 0.007, seg_major=12, seg_minor=6, rot=(math.pi / 2, 0, 0))
-        cylinder(f"GlassLens_{s}", "ArtGlass", (gx, -0.255, 1.495), 0.052, 0.004, segments=12, rot=(math.pi / 2, 0, 0))
-        tube(f"GlassTemple_{s}", "ArtBlack", (s * 0.14, -0.245, 1.495), (s * 0.24, -0.03, 1.485), 0.007, 4)
-    box("GlassBridge", "ArtBlack", (0.0, -0.255, 1.50), (0.035, 0.015, 0.012))
-    
-    # Cheerful Smile
-    box("Teeth", "ArtTeeth", (0.0, -0.23, 1.35), (0.11, 0.02, 0.028))
-    box("Mouth", "ArtLip", (0.0, -0.225, 1.33), (0.085, 0.02, 0.02))
-    
-    # Volumetric Wavy/Curly Brown Hair Locks
-    # Hair mass back
-    icosphere("HairBack", "ArtHairBrown", (0.0, 0.09, 1.48), 0.21, scale=(1.12, 0.98, 0.88), subdivisions=1)
-    # Curly hair locks surrounding cheeks and forehead
-    for k in range(16):
-        ang = math.pi * 0.12 + k * (math.pi * 1.76 / 15)
-        hx = 0.23 * math.cos(ang)
-        hy = 0.20 * math.sin(ang) + 0.01
-        hz = 1.42 + 0.04 * (k % 3)
-        icosphere(f"HairCurl_{k}", "ArtHairBrown", (hx, hy, hz), 0.075, scale=(1.0, 1.0, 1.2), subdivisions=1)
+        torus(f"GlassesFrame_{s}", "ArtGlassFrame", (s * 0.09, -0.235, 1.51), 0.052, 0.010, seg_major=10, seg_minor=4, rot=(math.pi/2, 0, 0))
+        cylinder(f"GlassesLens_{s}", "ArtGlassLens", (s * 0.09, -0.235, 1.51), 0.046, 0.005, segments=8, rot=(math.pi/2, 0, 0))
+        tube(f"GlassesTemple_{s}", "ArtGlassFrame", (s * 0.14, -0.23, 1.51), (s * 0.235, -0.04, 1.51), 0.008, segments=4)
+    box("GlassesBridge", "ArtGlassFrame", (0.0, -0.235, 1.51), (0.045, 0.012, 0.012))
+
+    # --- TILTED ARTIST BERET (幾何貝雷帽) ---
+    beret_z = 1.63
+    # Main slanted beret crown (tilted stylishly to right side)
+    icosphere("BeretCrown", "ArtBeretNavy", (0.04, -0.02, beret_z), 0.30, scale=(1.20, 1.15, 0.55), subdivisions=1, rot=(0.15, 0.25, -0.1))
+    # Beret Center Stalk / Tip
+    cylinder("BeretStalk", "ArtBeretDark", (0.06, -0.02, beret_z + 0.16), 0.015, 0.035, segments=6, rot=(0.15, 0.25, -0.1))
+    # Lower fitted beret headband
+    cylinder("BeretBand", "ArtBeretDark", (0.0, 0.0, beret_z - 0.06), 0.275, 0.04, segments=12, rot=(0.08, 0.12, 0))
+
+    # Metallic Triangle Emblem / Badge on Beret Front
+    box("BeretBadgeTriangle", "ArtBadgeGold", (-0.14, -0.23, beret_z + 0.04), (0.045, 0.015, 0.045), rot=(-0.1, 0.3, 0.78))
+    box("BeretBadgeGem", "ArtBadgeGreen", (-0.14, -0.24, beret_z + 0.04), (0.025, 0.010, 0.025), rot=(-0.1, 0.3, 0.78))
+
+    # Paintbrushes tucked behind beret band on side
+    b1_start = (-0.18, -0.15, beret_z + 0.08)
+    b1_end = (-0.24, 0.08, beret_z + 0.24)
+    tube("TuckedBrush1_Shaft", "ArtBrushWood", b1_start, b1_end, 0.010, segments=6)
+    cylinder("TuckedBrush1_Ferrule", "ArtBrushSilver", (-0.22, 0.02, beret_z + 0.20), 0.012, 0.025, segments=6)
+    cylinder("TuckedBrush1_Tip", "ArtBrushTipCyan", (-0.24, 0.08, beret_z + 0.24), 0.010, 0.03, segments=6, r2=0.002)
+
+    b2_start = (-0.15, -0.18, beret_z + 0.06)
+    b2_end = (-0.20, 0.05, beret_z + 0.21)
+    tube("TuckedBrush2_Shaft", "ArtBrushWood", b2_start, b2_end, 0.009, segments=6)
+    cylinder("TuckedBrush2_Tip", "ArtBrushTipRed", (-0.20, 0.05, beret_z + 0.21), 0.009, 0.028, segments=6, r2=0.002)
 
 
-def build_beret():
-    # Tilted French Artist Beret (幾何貝雷帽)
-    beret_z = 1.58
-    # Beret band
-    loft("BeretBand", "ArtBeretBand", [(beret_z, 0.25, 0.25, 0.0), (beret_z + 0.05, 0.26, 0.26, -0.01)], n=8)
+# -------------------------------------------------------------
+# 6. ARTISTIC SCEPTER WITH PALETTE CREST & SPECTRUM POLE
+# -------------------------------------------------------------
+
+def build_artistic_scepter():
+    sx = 0.49
+    sy = -0.25
+    top_z = 0.84
     
-    # Flaring puffy beret crown tilted stylishly to the side
-    beret_bm = bmesh.new()
-    b_rings = [
-        (beret_z + 0.04, 0.28, 0.28, -0.01),
-        (beret_z + 0.12, 0.35, 0.35, 0.02),
-        (beret_z + 0.19, 0.31, 0.31, 0.04),
-        (beret_z + 0.24, 0.16, 0.16, 0.05)
+    # 1. Faceted Optical Crystal Prism Bottom Spike
+    cylinder("PrismTip", "ArtPrismPoint", (sx, sy, 0.04), 0.035, 0.08, segments=6, r2=0.01)
+    cylinder("PrismMount", "ArtScepterBrass", (sx, sy, 0.09), 0.044, 0.03, segments=8)
+    
+    # 2. Rainbow Chromatic Spectrum Bar
+    spectrum_mats = [
+        "ArtSpecPurple",
+        "ArtSpecBlue",
+        "ArtSpecCyan",
+        "ArtSpecGreen",
+        "ArtSpecYellow",
+        "ArtSpecOrange",
+        "ArtSpecRed",
     ]
-    loft("BeretCrown", "ArtBeretNavy", b_rings, n=10)
-    # Beret top stalk / tab
-    box("BeretStalk", "ArtBeretNavy", (0.02, 0.05, beret_z + 0.26), (0.03, 0.03, 0.05), rot=(0.2, 0.1, 0))
-    
-    # Paintbrushes tucked into the side of the beret
-    tube("HatBrush1", "ArtBrushWood", (0.16, -0.16, beret_z + 0.02), (0.24, -0.18, beret_z + 0.22), 0.012, 4)
-    cylinder("HatBrushFerrule1", "ArtBrushMetal", (0.23, -0.18, beret_z + 0.19), 0.014, 0.025, segments=4)
-    cylinder("HatBrushTip1", "ArtPaintRed", (0.24, -0.18, beret_z + 0.22), 0.015, 0.035, segments=4)
-    
-    tube("HatBrush2", "ArtBrushWood", (0.12, -0.22, beret_z + 0.02), (0.18, -0.26, beret_z + 0.20), 0.012, 4)
-    cylinder("HatBrushTip2", "ArtPaintYellow", (0.18, -0.26, beret_z + 0.20), 0.015, 0.035, segments=4)
+    band_h = 0.10
+    for idx, smat in enumerate(spectrum_mats):
+        bz = 0.14 + idx * band_h
+        cylinder(f"SpectrumBand_{idx}", smat, (sx, sy, bz), 0.032, band_h, segments=8)
+        box(f"SpecTick_{idx}", "ArtBeretDark", (sx, sy - 0.033, bz), (0.016, 0.005, 0.012))
 
+    # Upper Golden Collar
+    cylinder("StaffUpperCollar", "ArtScepterBrass", (sx, sy, 0.86), 0.045, 0.04, segments=8)
 
-def build_palette_scepter():
-    cx = -0.44
-    cy = -0.16
-    
-    # 1. Base Crystal / Ferrule
-    cylinder("ScepterTip", "ArtGold", (cx, cy, 0.03), 0.028, 0.06, segments=8)
-    cylinder("ScepterCrystal", "ArtPaintPurple", (cx, cy, 0.01), 0.022, 0.04, segments=6, r2=0.0)
-    
-    # 2. Rainbow Spectrum Shaft
-    spectrum_colors = [
-        "ArtPaintPurple", "ArtPaintBlue", "ArtPaintCyan", "ArtPaintGreen", "ArtPaintYellow", "ArtPaintOrange", "ArtPaintRed"
-    ]
-    seg_h = 0.82 / len(spectrum_colors)
-    for i, c in enumerate(spectrum_colors):
-        z_start = 0.06 + i * seg_h
-        z_end = z_start + seg_h
-        tube(f"SpectrumSeg_{i}", c, (cx, cy, z_start), (cx, cy, z_end), 0.024, segments=8)
-        
-    # 3. Brass Collar
-    cylinder("ScepterCollar", "ArtBrass", (cx, cy, 0.89), 0.034, 0.035, segments=8)
-    
-    # 4. Steampunk Brass Gear Mechanism
-    gear_r = 0.075
+    # 3. Interlocking Steampunk Clockwork Gears Mechanism
     gear_z = 0.96
-    cylinder("GearHub", "ArtGold", (cx, cy - 0.02, gear_z), gear_r, 0.016, segments=12, rot=(math.pi / 2, 0, 0))
-    for k in range(8):
-        ang = k * math.pi / 4
-        tx = cx + (gear_r + 0.01) * math.cos(ang)
-        tz = gear_z + (gear_r + 0.01) * math.sin(ang)
-        box(f"GearTooth_{k}", "ArtGold", (tx, cy - 0.02, tz), (0.018, 0.018, 0.018), rot=(0, -ang, 0))
-        
-    # 5. Wooden Palette Scepter Head (多面體藝術權杖頭)
-    pal_z = 1.06
-    cylinder("ScepterPalette", "ArtPaletteWood", (cx, cy - 0.01, pal_z), 0.155, 0.026, segments=12, rot=(math.pi / 2, 0, 0))
-    # Thumb hole
-    cylinder("ScepterPalHole", "ArtBlack", (cx + 0.05, cy - 0.025, pal_z - 0.03), 0.026, 0.028, segments=8, rot=(math.pi / 2, 0, 0))
-    # 5 Colorful Paint Dollops
-    paints = [
-        ("ArtPaintRed", -0.08, 0.06),
-        ("ArtPaintBlue", 0.0, 0.10),
-        ("ArtPaintYellow", 0.08, 0.07),
-        ("ArtPaintGreen", -0.10, -0.02),
-        ("ArtPaintPurple", 0.10, 0.0)
+    cylinder("MainGearHub", "ArtScepterGold", (sx, sy, gear_z), 0.075, 0.024, segments=12, rot=(math.pi/2, 0, 0))
+    cylinder("MainGearAxle", "ArtScepterBrass", (sx, sy - 0.015, gear_z), 0.040, 0.012, segments=8, rot=(math.pi/2, 0, 0))
+    for i in range(8):
+        ang = i * math.pi / 4
+        tx = sx + 0.085 * math.cos(ang)
+        tz = gear_z + 0.085 * math.sin(ang)
+        box(f"MainGearTooth_{i}", "ArtScepterGold", (tx, sy, tz), (0.02, 0.022, 0.02), rot=(0, -ang, 0))
+
+    # Small secondary gear
+    s_gx = sx - 0.072
+    s_gz = gear_z - 0.052
+    cylinder("SmallGearHub", "ArtScepterBrass", (s_gx, sy + 0.008, s_gz), 0.042, 0.018, segments=8, rot=(math.pi/2, 0, 0))
+    for i in range(6):
+        ang = i * math.pi / 3
+        tx = s_gx + 0.048 * math.cos(ang)
+        tz = s_gz + 0.048 * math.sin(ang)
+        box(f"SmallTooth_{i}", "ArtScepterBrass", (tx, sy + 0.008, tz), (0.014, 0.018, 0.014), rot=(0, -ang, 0))
+
+    # 4. Golden Palette Shape Crest with Colorful Paint Gems at Summit
+    crest_z = gear_z + 0.16
+    # Palette crest disc
+    cylinder("CrestPaletteDisc", "ArtScepterGold", (sx, sy, crest_z), 0.085, 0.020, segments=10, rot=(math.pi/2, 0, 0))
+    cylinder("CrestThumbHole", "ArtScepterBrass", (sx + 0.035, sy - 0.012, crest_z), 0.022, 0.024, segments=8, rot=(math.pi/2, 0, 0))
+    
+    # Colorful Paint Gems on Crest
+    crest_gems = [
+        ("CrestGemRed", "ArtSplatterRed", (sx - 0.04, sy - 0.015, crest_z + 0.04)),
+        ("CrestGemYellow", "ArtSplatterYellow", (sx, sy - 0.015, crest_z + 0.055)),
+        ("CrestGemCyan", "ArtSplatterCyan", (sx + 0.04, sy - 0.015, crest_z + 0.04)),
+        ("CrestGemGreen", "ArtSplatterGreen", (sx - 0.05, sy - 0.015, crest_z)),
+        ("CrestGemPurple", "ArtSplatterPurple", (sx - 0.03, sy - 0.015, crest_z - 0.04)),
     ]
-    for i, (c, dx, dz) in enumerate(paints):
-        cylinder(f"ScepterPaint_{i}", c, (cx + dx, cy - 0.025, pal_z + dz), 0.026, 0.016, segments=8, rot=(math.pi / 2, 0, 0))
+    for gname, gmat, gloc in crest_gems:
+        icosphere(gname, gmat, gloc, 0.018, subdivisions=1)
 
 
 # -------------------------------------------------------------
@@ -514,14 +497,12 @@ def finalize_and_export():
     bpy.context.view_layer.objects.active = parts[0]
     
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    
     bpy.ops.object.join()
-    obj = bpy.context.object
+    
+    obj = bpy.context.active_object
     obj.name = "Artist"
-    obj.data.name = "Artist"
     
-    bpy.ops.object.shade_flat()
-    
+    # Clean up geometry & normals
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -568,10 +549,10 @@ def generate_artist():
     setup_materials()
     build_legs_and_sneakers()
     build_torso_and_apron()
-    build_arms_and_hands()
-    build_head_and_face()
-    build_beret()
-    build_palette_scepter()
+    build_messenger_bag()
+    build_arms_and_palette()
+    build_head_and_beret()
+    build_artistic_scepter()
     return finalize_and_export()
 
 

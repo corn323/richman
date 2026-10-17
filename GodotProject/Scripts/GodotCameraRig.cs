@@ -8,7 +8,7 @@ namespace Richman.GodotPresentation
         private Vector3 _focusPoint;
         private float _yaw;
         private float _pitch = 48f;
-        private float _distance = 20f;
+        private float _distance = 34f;
 
         public override void _Ready()
         {
@@ -21,12 +21,12 @@ namespace Richman.GodotPresentation
         public void Focus(Vector3 point, float distance)
         {
             _focusPoint = point;
-            _distance = Mathf.Clamp(distance, 8f, 28f);
+            _distance = Mathf.Clamp(distance, 8f, 40f);
         }
 
         public void FocusOverview()
         {
-            Focus(Vector3.Zero, 20f);
+            Focus(Vector3.Zero, 34f);
         }
 
         public override void _UnhandledInput(InputEvent @event)
@@ -39,7 +39,7 @@ namespace Richman.GodotPresentation
             else if (@event is InputEventMouseButton mouseButton && mouseButton.Pressed)
             {
                 if (mouseButton.ButtonIndex == MouseButton.WheelUp) _distance = Mathf.Max(8f, _distance - 1f);
-                if (mouseButton.ButtonIndex == MouseButton.WheelDown) _distance = Mathf.Min(28f, _distance + 1f);
+                if (mouseButton.ButtonIndex == MouseButton.WheelDown) _distance = Mathf.Min(40f, _distance + 1f);
             }
         }
 

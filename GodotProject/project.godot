@@ -26,6 +26,10 @@ window/stretch/mode="canvas_items"
 
 project/assembly_name="Richman.Godot"
 
+[filesystem]
+
+import/blender/enabled=false
+
 [input]
 
 focus_current_player={

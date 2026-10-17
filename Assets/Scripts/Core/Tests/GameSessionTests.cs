@@ -19,6 +19,96 @@ namespace Richman.Core.Tests
         }
 
         [Test]
+        public void PrototypeMapIdsAndSpecialTileTypesMatchTheMapRoute()
+        {
+            var board = PrototypeBoardFactory.Create();
+
+            Assert.That(board.TileCount, Is.EqualTo(36));
+            Assert.That(board.GetTileAt(1).Id, Is.EqualTo("tokyo"));
+            Assert.That(board.GetTileAt(2).Type, Is.EqualTo(BoardTileType.Chance));
+            Assert.That(board.GetTileAt(4).Type, Is.EqualTo(BoardTileType.Destiny));
+            Assert.That(board.GetTileAt(5).Id, Is.EqualTo("airport-1"));
+            Assert.That(board.GetTileAt(13).Type, Is.EqualTo(BoardTileType.Hospital));
+            Assert.That(board.GetTileAt(23).Type, Is.EqualTo(BoardTileType.Prison));
+            Assert.That(board.GetTileAt(25).Id, Is.EqualTo("airport-2"));
+            Assert.That(board.GetTileAt(27).Type, Is.EqualTo(BoardTileType.Court));
+            Assert.That(board.GetTileAt(35).Id, Is.EqualTo("summit-forum"));
+        }
+
+        [Test]
+        public void AirportLandingTransfersPlayerToThePairedAirport()
+        {
+            var session = CreateSession(
+                new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Tile("airport-1", BoardTileType.Airport, 2), Tile("rest-2", BoardTileType.Rest, 3), Tile("airport-2", BoardTileType.Airport, 4) },
+                new ScriptedDiceRoller(new DiceResult(1, 1)));
+
+            var roll = session.Execute(new RollDiceCommand(1));
+
+            Assert.That(roll.Succeeded, Is.True);
+            Assert.That(roll.ToTileIndex, Is.EqualTo(4));
+            Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(4));
+            Assert.That(session.State.LastEventMessage, Does.Contain("flew"));
+        }
+
+        [Test]
+        public void HospitalStaySkipsThePlayersNextTurnWithoutRollingDice()
+        {
+            var session = CreateSession(
+                new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("hospital", BoardTileType.Hospital, 2, 1), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1));
+            Assert.That(session.State.GetPlayer(1).DetainedTurnsRemaining, Is.EqualTo(1));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            var skipped = session.Execute(new RollDiceCommand(1));
+
+            Assert.That(skipped.Succeeded, Is.True);
+            Assert.That(skipped.DiceResult, Is.Null);
+            Assert.That(session.State.GetPlayer(1).DetainedTurnsRemaining, Is.Zero);
+            Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingEndTurn));
+            Assert.That(session.State.LastEventMessage, Does.Contain("skipped"));
+        }
+
+        [Test]
+        public void PrisonStaySkipsTwoTurnsAndCourtAppliesItsJudgmentFine()
+        {
+            var prison = CreateSession(
+                new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("prison", BoardTileType.Prison, 2, 2), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1)));
+            prison.Execute(new RollDiceCommand(1));
+            Assert.That(prison.State.GetPlayer(1).DetainedTurnsRemaining, Is.EqualTo(2));
+
+            var court = CreateSession(
+                new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("court", BoardTileType.Court, 2, 150), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1)));
+            court.Execute(new RollDiceCommand(1));
+
+            Assert.That(court.State.GetPlayer(1).Money, Is.EqualTo(350));
+            Assert.That(court.State.LastEventMessage, Does.Contain("Court judgment"));
+        }
+
+        [Test]
+        public void ChanceLandingDrawsCardAndAppliesItsEffect()
+        {
+            var session = CreateSession(
+                new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Tile("chance-2", BoardTileType.Chance, 2), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1));
+
+            Assert.That(session.State.LastDrawnCard.Id, Is.EqualTo("chance-festival-grant"));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(580));
+            Assert.That(session.State.LastEventMessage, Does.Contain("Festival Grant"));
+        }
+
+        [Test]
         public void RollMovesPlayerAndBuyCommandChangesMoneyAndOwnership()
         {
             var session = CreateSession(

@@ -98,6 +98,8 @@ namespace Richman.Core
         public int Money { get; private set; }
         public int CurrentTileIndex { get; private set; }
         public PlayerStatus Status { get; private set; }
+        public int DetainedTurnsRemaining { get; private set; }
+        public string DetentionReason { get; private set; } = string.Empty;
 
         internal void MoveTo(int tileIndex)
         {
@@ -132,6 +134,23 @@ namespace Richman.Core
         internal void MarkWinner()
         {
             Status = PlayerStatus.Winner;
+        }
+
+        internal void Detain(string reason, int turns)
+        {
+            if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A detention reason is required.", nameof(reason));
+            if (turns <= 0) throw new ArgumentOutOfRangeException(nameof(turns));
+            DetentionReason = reason;
+            DetainedTurnsRemaining = Math.Max(DetainedTurnsRemaining, turns);
+        }
+
+        internal string ServeDetainedTurn()
+        {
+            if (DetainedTurnsRemaining <= 0) return string.Empty;
+            var reason = DetentionReason;
+            DetainedTurnsRemaining--;
+            if (DetainedTurnsRemaining == 0) DetentionReason = string.Empty;
+            return reason;
         }
     }
 
@@ -201,6 +220,8 @@ namespace Richman.Core
         public TurnPhase Phase { get; internal set; }
         public PendingAction PendingAction { get; internal set; }
         public DiceResult LastDiceResult { get; internal set; }
+        public MapCard LastDrawnCard { get; internal set; }
+        public string LastEventMessage { get; internal set; } = string.Empty;
         public GameOutcome Outcome { get; internal set; }
 
         public PlayerState GetPlayer(int playerId)

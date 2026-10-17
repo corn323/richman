@@ -49,14 +49,15 @@ namespace Richman.GodotPresentation
             for (var i = 0; i < state.Players.Count; i++)
             {
                 var player = state.Players[i];
-                players += "P" + player.Id + "  $" + player.Money + "  TILE " + player.CurrentTileIndex + "  " + player.Status + (player.Id == state.CurrentPlayerId ? "  <" : "") + "\n";
+                var detention = player.DetainedTurnsRemaining > 0 ? "  " + player.DetentionReason.ToUpperInvariant() + " " + player.DetainedTurnsRemaining + "T" : string.Empty;
+                players += "P" + player.Id + "  $" + player.Money + "  TILE " + player.CurrentTileIndex + "  " + player.Status + detention + (player.Id == state.CurrentPlayerId ? "  <" : "") + "\n";
             }
             _players.Text = players;
             var tile = state.Board.GetTileAt(current.CurrentTileIndex);
             var property = state.GetProperty(tile.Id);
             _property.Text = tile.Type == BoardTileType.Property
                 ? "PROPERTY\n" + tile.DisplayName + "\nPRICE $" + tile.PurchasePrice + "  RENT $" + tile.GetRent(property == null ? 0 : property.UpgradeLevel)
-                : "CURRENT TILE\n" + tile.DisplayName + "\n" + tile.Type;
+                : "CURRENT TILE\n" + tile.DisplayName + "\n" + tile.Type + (state.LastDrawnCard == null ? string.Empty : "\n\n" + state.LastDrawnCard.Title + "\n" + state.LastDrawnCard.Description);
             var canAct = !busy && state.Outcome == null;
             _roll.Disabled = !(canAct && state.Phase == TurnPhase.AwaitingRoll);
             _buy.Disabled = !(canAct && state.PendingAction == PendingAction.BuyProperty);

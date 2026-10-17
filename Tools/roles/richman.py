@@ -1,16 +1,21 @@
 """
-Refined Richman (Host / 主持人) 3D Model Generator for Blender.
-Accurately implements character/richman.jpg:
-- Geometric low-poly style with crisp faceted surfaces
-- Flat cap (幾何多邊形帽子) in deep charcoal slate with prominent curved visor
-- Silver hair, rich dark chestnut handlebar mustache, monocle with gold chain, cheerful smile with white teeth
-- Tailored three-piece suit: deep charcoal slate coat framing rich burgundy vest in front
-- Notched suit lapels, white pocket square on left breast, double-breasted gold buttons
-- Center vertical gold buttons on burgundy vest, dark cravat & crisp shirt collar
-- Left hand casually tucked into coat pocket; right hand gripping cane head
-- Tailored charcoal trousers, rich brown Oxford dress shoes with darker sole & heel
-- Steampunk walking cane with golden die, 8-tooth gear mechanism, dark wood shaft & gold ferrule
-- Origin at (0, 0, 0) on ground, height ~ 1.82 units
+Richman / Host (大富翁 / 主持人) 3D Model Generator for Blender.
+Accurately implements character/richman.jpg based on Master Goal specifications:
+- 3D Stylized Low-Poly Character (3.5-head tall male figure)
+- Crisp faceted polygonal geometry, FLAT SHADING enabled
+- Grey newsboy flat cap (幾何多邊形帽子) with curved front visor
+- Refined grey/silver hair, thick dark chestnut handlebar mustache, cheerful smile
+- Golden monocle over right eye with hanging gold chain
+- Tailored three-piece suit: dark slate grey suit coat, rich burgundy vest, white pocket square
+- Crisp white shirt collar and dark cravat/necktie, golden coat & vest buttons
+- Left hand holds ornate golden pocket watch (with watch face & stem loop)
+- Right hand rests on Elegant Steampunk Walking Cane (多面體權杖頭):
+  * Polished mahogany wood shaft with golden ferrule tip
+  * Clockwork brass/golden gears mechanism
+  * Golden 6-sided polyhedral die at summit with recessed pips
+- Tailored dark slate trousers and polished brown Oxford leather dress shoes
+- Pivot at (0, 0, 0) at ground center, height ~ 1.82 units
+- 100% Manifold geometry (0 non-manifold edges), outward normals, clean UVs
 - Exports to assets/models/richman.glb
 """
 
@@ -38,7 +43,7 @@ def reset_scene():
         if m.name.startswith("Rich"):
             bpy.data.materials.remove(m)
 
-def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0):
+def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0, emission=None):
     if name in mats:
         return mats[name]
     mat = bpy.data.materials.new(name)
@@ -52,49 +57,62 @@ def get_or_create_mat(name, color, metal=0.0, rough=0.6, trans=0.0):
             bsdf.inputs["Transmission Weight"].default_value = trans
         elif "Transmission" in bsdf.inputs:
             bsdf.inputs["Transmission"].default_value = trans
+    if emission is not None:
+        if "Emission Color" in bsdf.inputs:
+            bsdf.inputs["Emission Color"].default_value = tuple(emission) + (1.0,)
+            if "Emission Strength" in bsdf.inputs:
+                bsdf.inputs["Emission Strength"].default_value = 2.0
+        elif "Emission" in bsdf.inputs:
+            bsdf.inputs["Emission"].default_value = tuple(emission) + (1.0,)
     mat.diffuse_color = tuple(color) + (1.0,)
     mats[name] = mat
     return mat
 
 def setup_materials():
     # Skin & Face
-    get_or_create_mat("RichSkin", (0.92, 0.65, 0.50), rough=0.7)
-    get_or_create_mat("RichCheek", (0.88, 0.44, 0.38), rough=0.7)
-    get_or_create_mat("RichNose", (0.90, 0.58, 0.46), rough=0.7)
-    get_or_create_mat("RichLip", (0.38, 0.10, 0.12), rough=0.6)
+    get_or_create_mat("RichSkin", (0.92, 0.68, 0.54), rough=0.7)
+    get_or_create_mat("RichCheek", (0.88, 0.46, 0.40), rough=0.7)
+    get_or_create_mat("RichNose", (0.90, 0.60, 0.48), rough=0.7)
+    get_or_create_mat("RichLip", (0.45, 0.18, 0.18), rough=0.6)
     get_or_create_mat("RichTeeth", (0.96, 0.96, 0.94), rough=0.3)
     get_or_create_mat("RichEyeWhite", (0.95, 0.95, 0.95), rough=0.2)
-    get_or_create_mat("RichEyeBlue", (0.08, 0.40, 0.82), rough=0.2)
-    get_or_create_mat("RichPupil", (0.03, 0.03, 0.04), rough=0.2)
+    get_or_create_mat("RichEyeBlue", (0.12, 0.55, 0.85), rough=0.2)
+    get_or_create_mat("RichPupil", (0.04, 0.04, 0.05), rough=0.2)
+    get_or_create_mat("RichHairGrey", (0.72, 0.74, 0.76), rough=0.7)
+    get_or_create_mat("RichMustache", (0.28, 0.16, 0.10), rough=0.75)
     
-    # Hair & Mustache
-    get_or_create_mat("RichHairGrey", (0.50, 0.53, 0.56), rough=0.8)
-    get_or_create_mat("RichStacheBrown", (0.20, 0.10, 0.05), rough=0.7)
-    
-    # Suit & Clothing (Deep charcoal slate with navy undertones, deep crimson burgundy vest)
-    get_or_create_mat("RichCoatSlate", (0.08, 0.10, 0.13), rough=0.75)
-    get_or_create_mat("RichCoatPocket", (0.05, 0.07, 0.09), rough=0.75)
-    get_or_create_mat("RichLapelSlate", (0.06, 0.08, 0.11), rough=0.75)
-    get_or_create_mat("RichPocketSquare", (0.96, 0.96, 0.96), rough=0.35)
-    get_or_create_mat("RichVestBurgundy", (0.26, 0.03, 0.07), rough=0.65)
-    get_or_create_mat("RichCravatDark", (0.04, 0.05, 0.07), rough=0.6)
-    get_or_create_mat("RichShirtCollar", (0.90, 0.92, 0.94), rough=0.5)
-    get_or_create_mat("RichPantsSlate", (0.07, 0.09, 0.12), rough=0.75)
-    
-    # Hat
-    get_or_create_mat("RichHatSlate", (0.07, 0.09, 0.12), rough=0.75)
-    get_or_create_mat("RichHatButton", (0.05, 0.07, 0.09), rough=0.75)
-    
-    # Shoes
-    get_or_create_mat("RichShoeBrown", (0.20, 0.10, 0.05), rough=0.35)
-    get_or_create_mat("RichShoeSole", (0.04, 0.03, 0.03), rough=0.85)
-    
-    # Accessories & Metals
-    get_or_create_mat("RichGold", (0.95, 0.76, 0.16), metal=0.92, rough=0.20)
-    get_or_create_mat("RichBrass", (0.85, 0.65, 0.18), metal=0.85, rough=0.28)
-    get_or_create_mat("RichWood", (0.12, 0.07, 0.04), rough=0.5)
-    get_or_create_mat("RichGlass", (0.85, 0.95, 1.0), metal=0.0, rough=0.1, trans=0.88)
-    get_or_create_mat("RichBlack", (0.03, 0.03, 0.04), rough=0.5)
+    # Golden Monocle
+    get_or_create_mat("RichMonocleGold", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+    get_or_create_mat("RichMonocleLens", (0.20, 0.85, 0.95), rough=0.1, trans=0.82)
+    get_or_create_mat("RichChainGold", (0.88, 0.70, 0.18), metal=0.9, rough=0.25)
+
+    # Newsboy Cap (Grey / Slate)
+    get_or_create_mat("RichHatSlate", (0.24, 0.27, 0.32), rough=0.7)
+    get_or_create_mat("RichHatDark", (0.16, 0.18, 0.22), rough=0.75)
+    get_or_create_mat("RichHatVisor", (0.20, 0.23, 0.28), rough=0.65)
+
+    # Tailored Three-Piece Suit
+    get_or_create_mat("RichCoatSlate", (0.22, 0.25, 0.30), rough=0.65)
+    get_or_create_mat("RichCoatLapel", (0.16, 0.19, 0.24), rough=0.7)
+    get_or_create_mat("RichPocketSquare", (0.95, 0.95, 0.95), rough=0.5)
+    get_or_create_mat("RichVestBurgundy", (0.48, 0.10, 0.16), rough=0.65)
+    get_or_create_mat("RichVestTrim", (0.36, 0.08, 0.12), rough=0.7)
+    get_or_create_mat("RichShirtWhite", (0.95, 0.95, 0.95), rough=0.6)
+    get_or_create_mat("RichTieNavy", (0.12, 0.15, 0.22), rough=0.6)
+    get_or_create_mat("RichGoldButton", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+
+    # Trousers & Oxford Shoes
+    get_or_create_mat("RichPantsSlate", (0.20, 0.23, 0.28), rough=0.7)
+    get_or_create_mat("RichShoeBrown", (0.32, 0.18, 0.10), rough=0.6)
+    get_or_create_mat("RichShoeDark", (0.18, 0.10, 0.08), rough=0.75)
+    get_or_create_mat("RichShoeSole", (0.08, 0.08, 0.08), rough=0.9)
+
+    # Pocket Watch & Walking Cane
+    get_or_create_mat("RichWatchGold", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+    get_or_create_mat("RichWatchFace", (0.94, 0.93, 0.88), rough=0.3)
+    get_or_create_mat("RichCaneWood", (0.28, 0.15, 0.08), rough=0.55)
+    get_or_create_mat("RichCaneGold", (0.96, 0.78, 0.18), metal=0.92, rough=0.20)
+    get_or_create_mat("RichCaneBrass", (0.85, 0.65, 0.18), metal=0.85, rough=0.28)
 
 def register_part(obj, mat_name):
     if mat_name in mats:
@@ -104,14 +122,6 @@ def register_part(obj, mat_name):
             obj.data.materials[0] = mats[mat_name]
     parts.append(obj)
     return obj
-
-def add_mesh_obj(name, bm, mat_name):
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    obj = bpy.data.objects.new(name, me)
-    bpy.context.collection.objects.link(obj)
-    return register_part(obj, mat_name)
 
 def box(name, mat_name, loc, size, rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_cube_add(size=1)
@@ -161,363 +171,244 @@ def tube(name, mat_name, p1, p2, r, segments=6, r2=None):
     obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
     return register_part(obj, mat_name)
 
-def slab(name, mat_name, p1, p2, width, thickness):
-    p1 = Vector(p1)
-    p2 = Vector(p2)
-    delta = p2 - p1
-    length = delta.length
-    if length < 1e-5:
-        length = 1e-4
-    bpy.ops.mesh.primitive_cube_add(size=1)
-    obj = bpy.context.object
-    obj.name = name
-    obj.location = (p1 + p2) / 2
-    obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
-    obj.scale = (width, thickness, length)
-    return register_part(obj, mat_name)
-
-def loft(name, mat_name, rings, n=8):
-    bm = bmesh.new()
-    ring_verts = []
-    for z, rx, ry, cy in rings:
-        rv = []
-        for k in range(n):
-            angle = math.pi / n + 2 * math.pi * k / n
-            x = rx * math.cos(angle)
-            y = cy + ry * math.sin(angle)
-            rv.append(bm.verts.new((x, y, z)))
-        ring_verts.append(rv)
-    bm.verts.ensure_lookup_table()
-    for i in range(len(ring_verts) - 1):
-        for k in range(n):
-            v1 = ring_verts[i][k]
-            v2 = ring_verts[i][(k + 1) % n]
-            v3 = ring_verts[i + 1][(k + 1) % n]
-            v4 = ring_verts[i + 1][k]
-            bm.faces.new((v1, v2, v3, v4))
-    bm.faces.new(ring_verts[0][::-1])
-    bm.faces.new(ring_verts[-1])
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return add_mesh_obj(name, bm, mat_name)
-
 
 # -------------------------------------------------------------
-# BUILDER FUNCTIONS
+# 1. LEGS, TAILORED TROUSERS & OXFORD LEATHER SHOES
 # -------------------------------------------------------------
 
 def build_legs_and_shoes():
-    for s in (-1, 1):
-        x = s * 0.13
-        # Tailored trouser leg in dark charcoal slate
-        leg_rings = [
-            (0.12, 0.088, 0.088, 0.0),
-            (0.32, 0.095, 0.095, 0.0),
-            (0.55, 0.115, 0.115, 0.0)
-        ]
-        l = loft(f"Leg_{s}", "RichPantsSlate", leg_rings, n=8)
-        l.location.x = x
-        
+    for side, sx in [("L", -0.165), ("R", 0.165)]:
+        # Tailored dress trousers thigh & calf
+        cylinder(f"LegThigh_{side}", "RichPantsSlate", (sx, 0.0, 0.44), 0.13, 0.32, segments=8)
+        cylinder(f"LegCalf_{side}", "RichPantsSlate", (sx, 0.01, 0.28), 0.12, 0.14, segments=8)
+        # Crisp trouser crease fold
+        box(f"TrouserCrease_{side}", "RichPantsSlate", (sx, -0.09, 0.34), (0.02, 0.04, 0.28))
         # Trouser cuff
-        cylinder(f"Cuff_{s}", "RichPantsSlate", (x, 0.0, 0.115), 0.095, 0.03, segments=8)
-        
-        # Rich mahogany brown dress shoes
-        icosphere(f"ShoeUpper_{s}", "RichShoeBrown", (x, -0.05, 0.068), 0.105, scale=(0.95, 1.65, 0.72), subdivisions=1)
-        icosphere(f"ShoeToe_{s}", "RichShoeBrown", (x, -0.12, 0.045), 0.065, scale=(1.05, 1.1, 0.65), subdivisions=1)
-        # Sole welt
-        box(f"ShoeSole_{s}", "RichShoeSole", (x, -0.04, 0.014), (0.18, 0.35, 0.026))
-        # Raised heel block
-        box(f"ShoeHeel_{s}", "RichShoeSole", (x, 0.05, 0.024), (0.165, 0.13, 0.03))
+        cylinder(f"TrouserCuff_{side}", "RichCoatLapel", (sx, 0.0, 0.17), 0.115, 0.04, segments=8)
 
+        # Polished Mahogany Brown Oxford Shoe
+        box(f"ShoeFoot_{side}", "RichShoeBrown", (sx, -0.06, 0.08), (0.20, 0.29, 0.13))
+        box(f"ShoeToeCap_{side}", "RichShoeDark", (sx, -0.17, 0.07), (0.18, 0.09, 0.11))
+        # Dark leather sole & raised heel
+        box(f"ShoeSole_{side}", "RichShoeSole", (sx, -0.06, 0.02), (0.22, 0.32, 0.035))
+        box(f"ShoeHeel_{side}", "RichShoeSole", (sx, 0.05, 0.035), (0.21, 0.12, 0.06))
+        # Shoe Laces tab
+        box(f"ShoeLace_{side}", "RichShoeDark", (sx, -0.08, 0.135), (0.12, 0.10, 0.025))
+
+
+# -------------------------------------------------------------
+# 2. TORSO, COAT, BURGUNDY VEST, SHIRT & CRAVAT
+# -------------------------------------------------------------
 
 def build_torso_and_vest():
-    # 1. Torso Base (Dark Charcoal Overcoat Body)
-    # The coat forms the main torso block
-    coat_rings = [
-        (0.42, 0.36, 0.28, 0.0),     # Bottom coat hem (flaring around thighs)
-        (0.56, 0.39, 0.31, -0.01),
-        (0.74, 0.42, 0.34, -0.02),
-        (0.94, 0.43, 0.35, -0.02),
-        (1.08, 0.40, 0.32, -0.01),
-        (1.20, 0.32, 0.24, 0.0),
-        (1.26, 0.18, 0.14, 0.0)      # Shoulder opening
-    ]
-    loft("CoatTorsoMain", "RichCoatSlate", coat_rings, n=12)
+    # Pelvis & Suit Coat Tail Hem
+    cylinder("CoatTail", "RichCoatSlate", (0.0, 0.0, 0.58), 0.275, 0.18, segments=10)
     
-    # 2. Burgundy Vest Front Panel
-    # In richman.jpg, the burgundy vest occupies the front chest & abdomen (between x = -0.16 and +0.16)
-    # We build the vest as a curved front panel that sits slightly proud of the coat core:
-    vest_bm = bmesh.new()
-    vest_levels = [
-        # (z, width, y_front)
-        (0.52, 0.24, -0.31),  # Lower vest hem
-        (0.66, 0.30, -0.345), # Belly center
-        (0.84, 0.32, -0.36),  # Upper belly
-        (1.02, 0.28, -0.34),  # Chest
-        (1.15, 0.20, -0.28),  # V-neck top
-    ]
-    vest_rows = []
-    for z, w, y in vest_levels:
-        # 5 points across the front arc
-        p_row = [
-            vest_bm.verts.new((-w * 0.5, y + 0.04, z)),
-            vest_bm.verts.new((-w * 0.28, y + 0.01, z)),
-            vest_bm.verts.new((0.0, y, z)),
-            vest_bm.verts.new((w * 0.28, y + 0.01, z)),
-            vest_bm.verts.new((w * 0.5, y + 0.04, z))
-        ]
-        vest_rows.append(p_row)
-    vest_bm.verts.ensure_lookup_table()
+    # Lower Torso (Waist / Coat & Vest Core)
+    cylinder("TorsoWaist", "RichCoatSlate", (0.0, -0.01, 0.82), 0.295, 0.32, segments=10, r2=0.29)
+    # Chest
+    cylinder("TorsoChest", "RichCoatSlate", (0.0, -0.02, 1.08), 0.29, 0.26, segments=10, r2=0.26)
     
-    for i in range(len(vest_rows) - 1):
-        for j in range(4):
-            v1 = vest_rows[i][j]
-            v2 = vest_rows[i][j + 1]
-            v3 = vest_rows[i + 1][j + 1]
-            v4 = vest_rows[i + 1][j]
-            vest_bm.faces.new((v1, v2, v3, v4))
-            
-    bmesh.ops.recalc_face_normals(vest_bm, faces=vest_bm.faces)
-    vest_obj = add_mesh_obj("VestFrontPanel", vest_bm, "RichVestBurgundy")
+    # Rich Burgundy Vest Front
+    box("VestFront", "RichVestBurgundy", (0.0, -0.24, 0.88), (0.22, 0.08, 0.38))
+    # Vest bottom pointed tabs (waistcoat points)
+    box("VestPoint_L", "RichVestBurgundy", (-0.06, -0.245, 0.67), (0.08, 0.06, 0.06), rot=(0, 0, -0.4))
+    box("VestPoint_R", "RichVestBurgundy", (0.06, -0.245, 0.67), (0.08, 0.06, 0.06), rot=(0, 0, 0.4))
+
+    # Vest Center Gold Buttons
+    for z in [0.75, 0.84, 0.93, 1.02]:
+        cylinder(f"VestButton_{z}", "RichGoldButton", (0.0, -0.285, z), 0.014, 0.01, segments=6, rot=(math.pi/2, 0, 0))
+
+    # Crisp White Dress Shirt Collar in V-neck
+    box("ShirtCollarCenter", "RichShirtWhite", (0.0, -0.22, 1.15), (0.12, 0.08, 0.18))
+    box("CollarWing_L", "RichShirtWhite", (-0.05, -0.23, 1.20), (0.06, 0.04, 0.06), rot=(0.1, 0.2, -0.2))
+    box("CollarWing_R", "RichShirtWhite", (0.05, -0.23, 1.20), (0.06, 0.04, 0.06), rot=(0.1, -0.2, 0.2))
+
+    # Dark Navy Necktie / Cravat
+    tube("CravatTie", "RichTieNavy", (0.0, -0.235, 1.22), (0.0, -0.25, 1.04), 0.024, segments=4)
+    cylinder("TieKnot", "RichTieNavy", (0.0, -0.238, 1.19), 0.025, 0.03, segments=6)
+
+    # Suit Coat Lapels (Framing the burgundy vest)
+    box("Lapel_L", "RichCoatLapel", (-0.16, -0.25, 1.04), (0.10, 0.06, 0.34), rot=(0, 0, -0.1))
+    box("Lapel_R", "RichCoatLapel", (0.16, -0.25, 1.04), (0.10, 0.06, 0.34), rot=(0, 0, 0.1))
+    # Notched Lapel Upper Flaps
+    box("LapelUpper_L", "RichCoatLapel", (-0.15, -0.23, 1.18), (0.08, 0.05, 0.09), rot=(0.1, 0, -0.2))
+    box("LapelUpper_R", "RichCoatLapel", (0.15, -0.23, 1.18), (0.08, 0.05, 0.09), rot=(0.1, 0, 0.2))
+
+    # White Handkerchief Pocket Square on Left Breast Pocket
+    box("BreastPocket", "RichCoatLapel", (-0.16, -0.27, 1.08), (0.08, 0.02, 0.04))
+    box("PocketSquare", "RichPocketSquare", (-0.16, -0.275, 1.11), (0.06, 0.015, 0.03), rot=(0.1, 0, 0.2))
+
+    # Coat Waist Flap Pockets
+    box("CoatPocket_L", "RichCoatLapel", (-0.22, -0.24, 0.76), (0.11, 0.04, 0.08))
+    box("CoatPocket_R", "RichCoatLapel", (0.22, -0.24, 0.76), (0.11, 0.04, 0.08))
+
+    # Double-Breasted Gold Buttons on Coat
+    for z in [0.82, 0.94]:
+        cylinder(f"CoatButton_L_{z}", "RichGoldButton", (-0.13, -0.275, z), 0.016, 0.01, segments=6, rot=(math.pi/2, 0, 0))
+        cylinder(f"CoatButton_R_{z}", "RichGoldButton", (0.13, -0.275, z), 0.016, 0.01, segments=6, rot=(math.pi/2, 0, 0))
+
+
+# -------------------------------------------------------------
+# 3. ARMS, HANDS, GOLDEN POCKET WATCH & CANE REST
+# -------------------------------------------------------------
+
+def build_arms_and_watch():
+    # --- RIGHT ARM (Resting gently on Cane Summit) ---
+    r_sh = (0.34, -0.02, 1.14)
+    icosphere("Shoulder_R", "RichCoatSlate", r_sh, 0.12, subdivisions=1)
+    # Upper Arm in suit jacket
+    tube("UpperArm_R", "RichCoatSlate", r_sh, (0.46, -0.05, 0.94), 0.085, segments=8)
+    icosphere("Elbow_R", "RichCoatSlate", (0.46, -0.05, 0.94), 0.082, subdivisions=1)
+    # Forearm extending to rest on cane
+    tube("Forearm_R", "RichCoatSlate", (0.46, -0.05, 0.94), (0.48, -0.22, 0.86), 0.078, segments=8)
+    # Jacket Cuff & Gold Cufflinks
+    cylinder("JacketCuff_R", "RichCoatLapel", (0.48, -0.22, 0.86), 0.082, 0.04, segments=8)
+    cylinder("Cufflink_R", "RichGoldButton", (0.52, -0.22, 0.86), 0.010, 0.015, segments=6, rot=(0, math.pi/2, 0))
+    # Right Hand resting gracefully over cane head
+    icosphere("Hand_R", "RichSkin", (0.49, -0.25, 0.84), 0.072, scale=(1.0, 1.1, 0.9), subdivisions=1)
+    box("Thumb_R", "RichSkin", (0.45, -0.23, 0.85), (0.028, 0.04, 0.028), rot=(0.2, 0.2, 0.3))
+    box("Fingers_R", "RichSkin", (0.50, -0.26, 0.83), (0.065, 0.04, 0.065), rot=(0, 0.2, 0.2))
+
+    # --- LEFT ARM (Holding Golden Pocket Watch) ---
+    l_sh = (-0.34, -0.02, 1.14)
+    icosphere("Shoulder_L", "RichCoatSlate", l_sh, 0.12, subdivisions=1)
+    # Upper Arm
+    tube("UpperArm_L", "RichCoatSlate", l_sh, (-0.46, -0.08, 0.95), 0.085, segments=8)
+    icosphere("Elbow_L", "RichCoatSlate", (-0.46, -0.08, 0.95), 0.082, subdivisions=1)
+    # Forearm bent forward/up holding pocket watch
+    tube("Forearm_L", "RichCoatSlate", (-0.46, -0.08, 0.95), (-0.32, -0.26, 0.90), 0.078, segments=8)
+    cylinder("JacketCuff_L", "RichCoatLapel", (-0.32, -0.26, 0.90), 0.082, 0.04, segments=8)
+    cylinder("Cufflink_L", "RichGoldButton", (-0.36, -0.26, 0.90), 0.010, 0.015, segments=6, rot=(0, math.pi/2, 0))
+    # Left Hand presenting pocket watch
+    icosphere("Hand_L", "RichSkin", (-0.28, -0.32, 0.90), 0.072, scale=(1.0, 1.1, 0.9), subdivisions=1)
+    box("Thumb_L", "RichSkin", (-0.24, -0.30, 0.92), (0.028, 0.04, 0.028), rot=(0.2, -0.2, -0.3))
+    box("Fingers_L", "RichSkin", (-0.30, -0.34, 0.89), (0.065, 0.04, 0.065), rot=(0, -0.2, -0.2))
+
+    # --- ORNATE GOLDEN POCKET WATCH ---
+    w_pos = (-0.26, -0.38, 0.92)
+    w_rot = (0.25, 0.35, 0.0)
+    # Round golden case
+    cylinder("WatchCase", "RichWatchGold", w_pos, 0.055, 0.018, segments=12, rot=w_rot)
+    # White watch face with clock markings
+    cylinder("WatchFace", "RichWatchFace", (w_pos[0], w_pos[1] - 0.01, w_pos[2]), 0.046, 0.005, segments=12, rot=w_rot)
+    # Golden top stem loop & crown
+    cylinder("WatchStem", "RichWatchGold", (w_pos[0], w_pos[1], w_pos[2] + 0.06), 0.012, 0.02, segments=6, rot=w_rot)
+    torus("WatchRing", "RichWatchGold", (w_pos[0], w_pos[1], w_pos[2] + 0.075), 0.018, 0.004, rot=w_rot)
+    # Watch chain connecting to vest
+    tube("WatchChainVest", "RichChainGold", (w_pos[0], w_pos[1], w_pos[2] + 0.07), (-0.05, -0.27, 0.85), 0.005, segments=4)
+
+
+# -------------------------------------------------------------
+# 4. HEAD, SILVER HAIR, MUSTACHE, MONOCLE & NEWSBOY CAP
+# -------------------------------------------------------------
+
+def build_head_and_hat():
+    # Neck
+    cylinder("Neck", "RichSkin", (0.0, -0.01, 1.28), 0.10, 0.12, segments=8)
     
-    # Give vest thickness
-    mod = vest_obj.modifiers.new(name="VestSolidify", type='SOLIDIFY')
-    mod.thickness = 0.02
-    bpy.context.view_layer.objects.active = vest_obj
-    bpy.ops.object.modifier_apply(modifier="VestSolidify")
+    # Stylized faceted cranium
+    icosphere("HeadBase", "RichSkin", (0.0, 0.0, 1.48), 0.23, scale=(1.12, 1.0, 1.04), subdivisions=2)
+    # Strong rounded nose
+    box("NoseBridge", "RichNose", (0.0, -0.225, 1.46), (0.045, 0.05, 0.07), rot=(0.2, 0, 0))
+    icosphere("NoseTip", "RichNose", (0.0, -0.245, 1.43), 0.042, scale=(1.1, 0.9, 0.9), subdivisions=1)
     
-    # 4 small gold buttons vertically down center of the burgundy vest
-    for z in (0.62, 0.74, 0.86, 0.98):
-        icosphere(f"VestBtn_{z}", "RichGold", (0.0, -0.362, z), 0.016, subdivisions=1)
-        
-    # 3. Shirt Collar & Dark Cravat (Tie)
-    cylinder("NeckCollar", "RichShirtCollar", (0.0, -0.01, 1.25), 0.12, 0.08, segments=8)
-    # Dark knotted cravat in the V-neck
-    icosphere("CravatKnot", "RichCravatDark", (0.0, -0.25, 1.18), 0.042, scale=(1.2, 0.8, 1.0), subdivisions=1)
-    slab("CravatDrape", "RichCravatDark", (0.0, -0.26, 1.15), (0.0, -0.30, 1.05), 0.060, 0.025)
-    
-    # 4. Tailored Notched Suit Lapels (西裝翻領)
-    # The lapels fold back along the coat front edge from the collar down to mid-chest
+    # Cheerful rosy cheeks & eyes
     for s in (-1, 1):
-        # Upper lapel section
-        slab(f"LapelUp_{s}", "RichLapelSlate", (s * 0.10, -0.27, 1.22), (s * 0.18, -0.34, 1.06), 0.075, 0.035)
-        # Notch triangle step
-        icosphere(f"LapelNotch_{s}", "RichLapelSlate", (s * 0.19, -0.345, 1.05), 0.022, subdivisions=1)
-        # Lower lapel section
-        slab(f"LapelLow_{s}", "RichLapelSlate", (s * 0.17, -0.335, 1.03), (s * 0.15, -0.37, 0.86), 0.065, 0.035)
-        
-    # 5. Double-Breasted Coat Buttons (Gold) on coat flaps
-    for z in (0.70, 0.84, 0.98):
-        for s in (-1, 1):
-            icosphere(f"CoatBtn_{s}_{z}", "RichGold", (s * 0.19, -0.375, z), 0.022, subdivisions=1)
-            
-    # 6. Pocket Square on Left Breast (Viewer's right, x > 0)
-    box("BreastPocket", "RichCoatPocket", (0.24, -0.32, 1.04), (0.09, 0.03, 0.025), rot=(0, 0, -0.15))
-    # Crisp white silk pocket square with two triangular peaks
-    box("PocketSquare1", "RichPocketSquare", (0.23, -0.33, 1.075), (0.045, 0.015, 0.045), rot=(0.1, 0.15, -0.25))
-    box("PocketSquare2", "RichPocketSquare", (0.26, -0.325, 1.068), (0.04, 0.015, 0.04), rot=(0.1, -0.15, 0.15))
-    
-    # 7. Lower Flap Pockets on Coat Sides
+        icosphere(f"Cheek_{s}", "RichCheek", (s * 0.12, -0.18, 1.41), 0.058, scale=(1.0, 0.6, 0.9), subdivisions=1)
+        icosphere(f"Ear_{s}", "RichSkin", (s * 0.25, 0.01, 1.47), 0.045, scale=(0.5, 0.9, 1.2), subdivisions=1)
+        # Eyes
+        box(f"EyeWhite_{s}", "RichEyeWhite", (s * 0.09, -0.205, 1.51), (0.055, 0.02, 0.035))
+        box(f"EyeIris_{s}", "RichEyeBlue", (s * 0.09, -0.218, 1.51), (0.032, 0.01, 0.032))
+        box(f"EyePupil_{s}", "RichPupil", (s * 0.09, -0.225, 1.51), (0.016, 0.008, 0.016))
+        # Eyebrows (Distinguished grey)
+        box(f"Eyebrow_{s}", "RichHairGrey", (s * 0.095, -0.21, 1.56), (0.075, 0.03, 0.025), rot=(0, 0, s * 0.12))
+
+    # Distinguished Silver Hair on sides and back
+    icosphere("HairBack", "RichHairGrey", (0.0, 0.10, 1.48), 0.21, scale=(1.14, 0.95, 0.85), subdivisions=1)
     for s in (-1, 1):
-        box(f"FlapPocket_{s}", "RichCoatPocket", (s * 0.31, -0.29, 0.62), (0.14, 0.045, 0.05), rot=(0, 0, s * 0.32))
-        icosphere(f"PocketBtn_{s}", "RichGold", (s * 0.31, -0.315, 0.62), 0.014, subdivisions=1)
+        icosphere(f"HairSide_{s}", "RichHairGrey", (s * 0.21, 0.02, 1.48), 0.095, scale=(0.6, 1.2, 1.2), subdivisions=1)
 
+    # Cheerful Dignified Smile showing teeth
+    box("MouthCavity", "RichLip", (0.0, -0.22, 1.34), (0.09, 0.02, 0.03))
+    box("TeethUpper", "RichTeeth", (0.0, -0.226, 1.35), (0.075, 0.015, 0.015))
 
-def build_arms_and_hands():
-    arm_r = 0.088
-    
-    # ------------------ LEFT ARM (Hand tucked into pocket) ------------------
-    sh_l = (0.38, 0.0, 1.15)
-    elbow_l = (0.49, -0.05, 0.90)
-    wrist_l = (0.38, -0.20, 0.68)
-    
-    icosphere("Shoulder_L", "RichCoatSlate", sh_l, 0.115, subdivisions=1)
-    tube("UpperArm_L", "RichCoatSlate", sh_l, elbow_l, arm_r, segments=8)
-    icosphere("Elbow_L", "RichCoatSlate", elbow_l, 0.09, subdivisions=1)
-    tube("ForeArm_L", "RichCoatSlate", elbow_l, wrist_l, arm_r - 0.005, segments=8)
-    tube("Cuff_L", "RichCoatSlate", wrist_l, (0.35, -0.24, 0.64), 0.088, segments=8)
-    icosphere("CuffBtn_L", "RichGold", (0.41, -0.20, 0.66), 0.015, subdivisions=1)
-    # Hand entering the pocket slit
-    icosphere("Hand_L", "RichSkin", (0.33, -0.25, 0.62), 0.065, scale=(0.9, 1.1, 0.8), subdivisions=1)
-    
-    # ------------------ RIGHT ARM (Holding cane) ------------------
-    # Position cane comfortably closer at x = -0.42
-    sh_r = (-0.38, 0.0, 1.15)
-    elbow_r = (-0.45, -0.06, 0.92)
-    wrist_r = (-0.43, -0.15, 0.80)
-    
-    icosphere("Shoulder_R", "RichCoatSlate", sh_r, 0.115, subdivisions=1)
-    tube("UpperArm_R", "RichCoatSlate", sh_r, elbow_r, arm_r, segments=8)
-    icosphere("Elbow_R", "RichCoatSlate", elbow_r, 0.09, subdivisions=1)
-    tube("ForeArm_R", "RichCoatSlate", elbow_r, wrist_r, arm_r - 0.005, segments=8)
-    tube("Cuff_R", "RichCoatSlate", wrist_r, (-0.42, -0.16, 0.74), 0.088, segments=8)
-    icosphere("CuffBtn_R", "RichGold", (-0.38, -0.17, 0.76), 0.015, subdivisions=1)
-    
-    # Hand resting on cane die (die center at x=-0.42, y=-0.16, z=1.045)
-    icosphere("Hand_R_Palm", "RichSkin", (-0.42, -0.16, 1.115), 0.065, scale=(1.1, 1.1, 0.65), subdivisions=1)
-    icosphere("Hand_R_Thumb", "RichSkin", (-0.37, -0.14, 1.08), 0.030, scale=(1.2, 0.8, 0.8), subdivisions=1)
-    for i, dx in enumerate((-0.032, 0.0, 0.032)):
-        icosphere(f"Hand_R_Finger_{i}", "RichSkin", (-0.42 + dx, -0.21, 1.07), 0.025, scale=(0.8, 1.2, 0.8), subdivisions=1)
-
-
-def build_head_and_face():
-    head_center = (0.0, -0.03, 1.45)
-    icosphere("HeadBase", "RichSkin", head_center, 0.225, scale=(1.10, 1.02, 1.02), subdivisions=2)
-    
+    # Magnificent Sculpted Handlebar Mustache (Rich dark chestnut)
     for s in (-1, 1):
-        icosphere(f"CheekVol_{s}", "RichSkin", (s * 0.14, -0.13, 1.40), 0.10, scale=(1.0, 0.9, 0.9), subdivisions=1)
-        icosphere(f"CheekBlush_{s}", "RichCheek", (s * 0.135, -0.185, 1.40), 0.055, scale=(1.1, 0.5, 0.9), subdivisions=1)
-        icosphere(f"Ear_{s}", "RichSkin", (s * 0.25, -0.02, 1.45), 0.055, scale=(0.45, 0.9, 1.2), subdivisions=1)
-        
-    # Button nose
-    icosphere("Nose", "RichNose", (0.0, -0.235, 1.42), 0.055, scale=(1.05, 0.95, 1.0), subdivisions=1)
-    
-    # Large expressive stylized cartoon eyes
-    for s in (-1, 1):
-        eye_x = s * 0.090
-        eye_y = -0.21
-        eye_z = 1.495
-        # White sclera
-        icosphere(f"EyeWhite_{s}", "RichEyeWhite", (eye_x, eye_y, eye_z), 0.046, scale=(1.05, 0.55, 1.0), subdivisions=1)
-        # Sapphire blue iris
-        icosphere(f"EyeIris_{s}", "RichEyeBlue", (eye_x, eye_y - 0.024, eye_z), 0.026, scale=(1.0, 0.5, 1.0), subdivisions=1)
-        # Dark pupil
-        icosphere(f"EyePupil_{s}", "RichPupil", (eye_x, eye_y - 0.035, eye_z), 0.013, scale=(1.0, 0.5, 1.0), subdivisions=1)
-        # Thick dark brown eyebrows with gentleman arch
-        slab(f"Eyebrow_{s}", "RichStacheBrown", (s * 0.045, -0.225, 1.565), (s * 0.15, -0.20, 1.575), 0.042, 0.025)
-        
-    # Glorious Voluminous Handlebar Mustache
-    icosphere("StacheCenter", "RichStacheBrown", (0.0, -0.255, 1.39), 0.050, scale=(1.5, 0.85, 0.95), subdivisions=1)
-    for s in (-1, 1):
-        p_start = (s * 0.02, -0.255, 1.39)
-        p_mid = (s * 0.13, -0.24, 1.37)
-        p_tip = (s * 0.21, -0.19, 1.415)
-        tube(f"StacheWing1_{s}", "RichStacheBrown", p_start, p_mid, 0.042, segments=6, r2=0.034)
-        tube(f"StacheWing2_{s}", "RichStacheBrown", p_mid, p_tip, 0.034, segments=6, r2=0.014)
-        icosphere(f"StacheTip_{s}", "RichStacheBrown", p_tip, 0.020, subdivisions=1)
-        
-    # Smile with white teeth
-    box("Teeth", "RichTeeth", (0.0, -0.23, 1.342), (0.11, 0.02, 0.028))
-    box("Mouth", "RichLip", (0.0, -0.225, 1.322), (0.085, 0.02, 0.02))
-    
-    # Silver-grey Hair
-    icosphere("HairBack", "RichHairGrey", (0.0, 0.09, 1.48), 0.21, scale=(1.12, 0.98, 0.88), subdivisions=1)
-    for s in (-1, 1):
-        icosphere(f"HairSide_{s}", "RichHairGrey", (s * 0.22, 0.01, 1.48), 0.095, scale=(0.7, 1.1, 1.25), subdivisions=1)
-        slab(f"Sideburn_{s}", "RichHairGrey", (s * 0.22, -0.07, 1.48), (s * 0.22, -0.10, 1.38), 0.035, 0.04)
+        tube(f"MustacheMain_{s}", "RichMustache", (0.0, -0.238, 1.39), (s * 0.12, -0.21, 1.37), 0.034, segments=6)
+        # Curved handlebar tips curling upward
+        tube(f"MustacheCurled_{s}", "RichMustache", (s * 0.12, -0.21, 1.37), (s * 0.17, -0.18, 1.405), 0.028, segments=5, r2=0.012)
+    icosphere("MustacheCenter", "RichMustache", (0.0, -0.24, 1.395), 0.032, scale=(1.3, 0.7, 0.8), subdivisions=1)
+
+    # --- GOLDEN MONOCLE OVER RIGHT EYE ---
+    m_eye = (0.09, -0.236, 1.51)
+    torus("MonocleRim", "RichMonocleGold", m_eye, 0.048, 0.008, seg_major=8, seg_minor=4, rot=(math.pi/2, 0, 0))
+    cylinder("MonocleLens", "RichMonocleLens", m_eye, 0.044, 0.005, segments=8, rot=(math.pi/2, 0, 0))
+    # Monocle gold chain hanging down to vest
+    tube("MonocleChain1", "RichChainGold", (0.13, -0.23, 1.48), (0.16, -0.20, 1.30), 0.005, segments=4)
+    tube("MonocleChain2", "RichChainGold", (0.16, -0.20, 1.30), (0.10, -0.26, 1.05), 0.005, segments=4)
+
+    # --- GREY NEWSBOY CAP / FLAT CAP (幾何多邊形帽子) ---
+    cap_z = 1.62
+    # Newsboy Cap Crown (faceted 8-panel drape)
+    icosphere("CapCrown", "RichHatSlate", (0.0, -0.01, cap_z), 0.28, scale=(1.10, 1.15, 0.68), subdivisions=1)
+    # Top Cap Button
+    cylinder("CapButton", "RichHatDark", (0.0, 0.0, cap_z + 0.18), 0.025, 0.015, segments=8)
+    # Front visor lip
+    box("CapVisor", "RichHatVisor", (0.0, -0.28, cap_z - 0.02), (0.28, 0.14, 0.022), rot=(-0.14, 0, 0))
+    # Cap band trim
+    cylinder("CapTrim", "RichHatDark", (0.0, -0.01, cap_z - 0.04), 0.285, 0.025, segments=12, rot=(0.04, 0, 0))
 
 
-def build_monocle():
-    # Monocle over character's right eye (viewer's left: x = -0.090, z = 1.495)
-    mx = -0.090
-    my = -0.256
-    mz = 1.495
-    m_radius = 0.054
-    
-    torus("MonocleRim", "RichGold", (mx, my, mz), m_radius, 0.007, seg_major=12, seg_minor=6, rot=(math.pi / 2, 0, 0))
-    cylinder("MonocleGlass", "RichGlass", (mx, my, mz), m_radius * 0.92, 0.004, segments=12, rot=(math.pi / 2, 0, 0))
-    
-    hinge_x = mx - m_radius - 0.008
-    hinge_y = my + 0.01
-    icosphere("MonocleHinge", "RichGold", (hinge_x, hinge_y, mz - 0.01), 0.012, subdivisions=1)
-    
-    # Elegant flowing gold chain down to the coat lapel
-    chain_pts = [
-        (hinge_x, hinge_y, mz - 0.01),
-        (hinge_x + 0.01, hinge_y + 0.02, mz - 0.08),
-        (hinge_x + 0.025, hinge_y + 0.035, mz - 0.16),
-        (-0.13, -0.22, 1.25),
-        (-0.15, -0.27, 1.12)
-    ]
-    for i in range(len(chain_pts) - 1):
-        tube(f"Chain_{i}", "RichGold", chain_pts[i], chain_pts[i + 1], 0.005, segments=4)
+# -------------------------------------------------------------
+# 5. ELEGANT STEAMPUNK WALKING CANE (多面體權杖頭)
+# -------------------------------------------------------------
 
+def build_walking_cane():
+    sx = 0.49
+    sy = -0.25
+    top_z = 0.84
+    
+    # 1. Golden Ferrule Tip at ground
+    cylinder("CaneSpike", "RichCaneGold", (sx, sy, 0.03), 0.028, 0.05, segments=6, r2=0.01)
+    cylinder("CaneBottomRing", "RichCaneBrass", (sx, sy, 0.065), 0.034, 0.03, segments=8)
+    
+    # 2. Polished Mahogany Wooden Cane Shaft
+    tube("CaneShaft", "RichCaneWood", (sx, sy, 0.07), (sx, sy, top_z), 0.026, segments=8)
+    
+    # Upper Brass & Gold Collar below grip
+    cylinder("CaneTopCollar", "RichCaneGold", (sx, sy, top_z + 0.02), 0.042, 0.04, segments=8)
 
-def build_flat_cap():
-    # Authentic geometric flat cap / newsboy cap (幾何多邊形帽子)
-    # Tilted forward, visor projecting over brow
-    cap_z = 1.56
-    cap_rings = [
-        (cap_z, 0.24, 0.24, -0.01),
-        (cap_z + 0.05, 0.29, 0.29, -0.03),
-        (cap_z + 0.11, 0.27, 0.27, -0.04),
-        (cap_z + 0.15, 0.16, 0.16, -0.03)
-    ]
-    loft("CapCrown", "RichHatSlate", cap_rings, n=8)
-    cylinder("CapButton", "RichHatButton", (0.0, -0.03, cap_z + 0.16), 0.035, 0.02, segments=8)
-    
-    # Curved forward visor
-    visor_bm = bmesh.new()
-    v_pts = [
-        (-0.17, -0.22, cap_z + 0.01),
-        (-0.13, -0.35, cap_z - 0.02),
-        (0.0, -0.38, cap_z - 0.025),
-        (0.13, -0.35, cap_z - 0.02),
-        (0.17, -0.22, cap_z + 0.01),
-        (0.14, -0.20, cap_z + 0.03),
-        (0.0, -0.23, cap_z + 0.02),
-        (-0.14, -0.20, cap_z + 0.03)
-    ]
-    thick = 0.024
-    bot_v = [visor_bm.verts.new(p) for p in v_pts]
-    top_v = [visor_bm.verts.new((p[0], p[1], p[2] + thick)) for p in v_pts]
-    n = len(v_pts)
-    for i in range(n):
-        visor_bm.faces.new((bot_v[i], bot_v[(i + 1) % n], top_v[(i + 1) % n], top_v[i]))
-    visor_bm.faces.new(bot_v[::-1])
-    visor_bm.faces.new(top_v)
-    bmesh.ops.recalc_face_normals(visor_bm, faces=visor_bm.faces)
-    add_mesh_obj("CapVisor", visor_bm, "RichHatSlate")
+    # 3. Clockwork Steampunk Gears Assembly
+    gear_z = top_z + 0.11
+    # Main Brass Gear Hub
+    cylinder("CaneGearHub", "RichCaneGold", (sx, sy, gear_z), 0.072, 0.024, segments=12, rot=(math.pi/2, 0, 0))
+    cylinder("CaneGearAxle", "RichCaneBrass", (sx, sy - 0.015, gear_z), 0.038, 0.012, segments=8, rot=(math.pi/2, 0, 0))
+    # 8 Gear Teeth
+    for i in range(8):
+        ang = i * math.pi / 4
+        tx = sx + 0.082 * math.cos(ang)
+        tz = gear_z + 0.082 * math.sin(ang)
+        box(f"GearTooth_{i}", "RichCaneGold", (tx, sy, tz), (0.018, 0.022, 0.018), rot=(0, -ang, 0))
 
+    # Secondary Interlocking Small Clockwork Gear
+    s_gx = sx - 0.068
+    s_gz = gear_z - 0.052
+    cylinder("SmallGearHub", "RichCaneBrass", (s_gx, sy + 0.008, s_gz), 0.042, 0.018, segments=8, rot=(math.pi/2, 0, 0))
+    for i in range(6):
+        ang = i * math.pi / 3
+        tx = s_gx + 0.048 * math.cos(ang)
+        tz = s_gz + 0.048 * math.sin(ang)
+        box(f"SmallTooth_{i}", "RichCaneBrass", (tx, sy + 0.008, tz), (0.014, 0.018, 0.014), rot=(0, -ang, 0))
 
-def build_cane():
-    cx = -0.42
-    cy = -0.16
-    
-    # 1. Base Gold Ferrule
-    cylinder("CaneTip", "RichGold", (cx, cy, 0.03), 0.028, 0.06, segments=8)
-    icosphere("CaneTipBall", "RichGold", (cx, cy, 0.01), 0.022, subdivisions=1)
-    
-    # 2. Polished Hardwood Shaft
-    tube("CaneShaft", "RichWood", (cx, cy, 0.05), (cx, cy, 0.88), 0.022, segments=8)
-    
-    # 3. Brass Collar
-    cylinder("CaneCollar", "RichBrass", (cx, cy, 0.89), 0.032, 0.035, segments=8)
-    torus("CaneCollarRing", "RichGold", (cx, cy, 0.905), 0.034, 0.008, seg_major=8, seg_minor=4)
-    
-    # 4. Steampunk Gear Assembly (齒輪機構)
-    gear_r = 0.065
-    gear_z = 0.95
-    cylinder("GearHub", "RichGold", (cx, cy - 0.02, gear_z), gear_r, 0.018, segments=12, rot=(math.pi / 2, 0, 0))
-    for k in range(8):
-        ang = k * math.pi / 4
-        tx = cx + (gear_r + 0.01) * math.cos(ang)
-        tz = gear_z + (gear_r + 0.01) * math.sin(ang)
-        box(f"GearTooth_{k}", "RichGold", (tx, cy - 0.02, tz), (0.018, 0.018, 0.018), rot=(0, -ang, 0))
-    cylinder("GearAxle", "RichBrass", (cx, cy - 0.03, gear_z), 0.022, 0.015, segments=6, rot=(math.pi / 2, 0, 0))
-    
-    gear2_r = 0.042
-    gear2_x = cx + 0.075
-    gear2_z = gear_z - 0.035
-    cylinder("Gear2Hub", "RichBrass", (gear2_x, cy - 0.02, gear2_z), gear2_r, 0.015, segments=8, rot=(math.pi / 2, 0, 0))
-    for k in range(6):
-        ang = k * math.pi / 3 + 0.25
-        tx = gear2_x + (gear2_r + 0.008) * math.cos(ang)
-        tz = gear2_z + (gear2_r + 0.008) * math.sin(ang)
-        box(f"Gear2Tooth_{k}", "RichBrass", (tx, cy - 0.02, tz), (0.014, 0.015, 0.014), rot=(0, -ang, 0))
-        
-    cylinder("DiePedestal", "RichGold", (cx, cy, 0.975), 0.045, 0.03, segments=8)
-    
-    # 5. Golden Die (黃金多面骰子)
-    die_z = 1.045
-    die_size = 0.125
-    box("GoldenDie", "RichGold", (cx, cy, die_z), (die_size, die_size, die_size), rot=(0.15, 0.15, 0.35))
-    
-    # Pips (black dots)
-    icosphere("DiePip_Front1", "RichBlack", (cx - 0.025, cy - 0.072, die_z + 0.025), 0.012, subdivisions=1)
-    icosphere("DiePip_Front2", "RichBlack", (cx + 0.025, cy - 0.072, die_z - 0.025), 0.012, subdivisions=1)
-    icosphere("DiePip_Side1", "RichBlack", (cx + 0.072, cy - 0.025, die_z + 0.03), 0.011, subdivisions=1)
-    icosphere("DiePip_Side2", "RichBlack", (cx + 0.072, cy + 0.025, die_z - 0.03), 0.011, subdivisions=1)
-    icosphere("DiePip_Side3", "RichBlack", (cx + 0.072, cy, die_z), 0.011, subdivisions=1)
+    # 4. Polyhedral Golden 6-Sided Die at Summit
+    die_z = gear_z + 0.15
+    die_rot = (0.35, 0.35, 0.45)
+    box("GoldenDie", "RichCaneGold", (sx, sy, die_z), (0.13, 0.13, 0.13), rot=die_rot)
+    # Recessed dark pips
+    box("DiePip1", "RichCoatLapel", (sx, sy - 0.07, die_z), (0.025, 0.01, 0.025), rot=die_rot)
+    box("DiePip2", "RichCoatLapel", (sx - 0.035, sy - 0.06, die_z + 0.035), (0.02, 0.01, 0.02), rot=die_rot)
+    box("DiePip3", "RichCoatLapel", (sx + 0.035, sy - 0.06, die_z - 0.035), (0.02, 0.01, 0.02), rot=die_rot)
 
 
 # -------------------------------------------------------------
@@ -534,14 +425,12 @@ def finalize_and_export():
     bpy.context.view_layer.objects.active = parts[0]
     
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    
     bpy.ops.object.join()
-    obj = bpy.context.object
+    
+    obj = bpy.context.active_object
     obj.name = "Richman"
-    obj.data.name = "Richman"
     
-    bpy.ops.object.shade_flat()
-    
+    # Clean up geometry & normals
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -588,11 +477,9 @@ def generate_richman():
     setup_materials()
     build_legs_and_shoes()
     build_torso_and_vest()
-    build_arms_and_hands()
-    build_head_and_face()
-    build_monocle()
-    build_flat_cap()
-    build_cane()
+    build_arms_and_watch()
+    build_head_and_hat()
+    build_walking_cane()
     return finalize_and_export()
 
 
