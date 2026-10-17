@@ -62,12 +62,16 @@ jobs:
           $editorDir = Join-Path $work "editor"
           $templateDir = Join-Path $work "templates"
           New-Item -ItemType Directory -Force -Path $work, $editorDir, $templateDir | Out-Null
-          Invoke-WebRequest "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_win64.zip" -OutFile $editorZip
-          Invoke-WebRequest "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_export_templates.tpz" -OutFile $templatesZip
+          Invoke-WebRequest "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_win64.zip" -OutFile $editorZip
+          Invoke-WebRequest "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_export_templates.tpz" -OutFile $templatesZip
           Expand-Archive -LiteralPath $editorZip -DestinationPath $editorDir -Force
           Expand-Archive -LiteralPath $templatesZip -DestinationPath $templateDir -Force
-          $godot = Join-Path $editorDir "Godot_v4.7.2-stable_mono_win64.exe"
-          if (-not (Test-Path -LiteralPath $godot)) { throw "Godot 4.7.2 .NET editor executable was not found in the official archive." }
+          $godotCandidates = @(Get-ChildItem -LiteralPath $editorDir -Filter "Godot_v4.7.2-stable_mono_win64.exe" -File -Recurse)
+          if ($godotCandidates.Count -ne 1) {
+            $archiveFiles = @(Get-ChildItem -LiteralPath $editorDir -File -Recurse | ForEach-Object { $_.FullName.Substring($editorDir.Length + 1) }) -join ", "
+            throw "Expected one Godot 4.7.2 .NET editor executable, found $($godotCandidates.Count). Archive files: $archiveFiles"
+          }
+          $godot = $godotCandidates[0].FullName
           $installedTemplates = Join-Path $env:APPDATA "Godot\export_templates\4.7.2.stable"
           New-Item -ItemType Directory -Force -Path $installedTemplates | Out-Null
           $templateSource = Join-Path $templateDir "templates"
