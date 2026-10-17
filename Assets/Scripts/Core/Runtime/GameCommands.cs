@@ -26,7 +26,13 @@ namespace Richman.Core
 
     public sealed class UpgradePropertyCommand : GameCommand
     {
-        public UpgradePropertyCommand(int playerId) : base(playerId) { }
+        public UpgradePropertyCommand(int playerId) : this(playerId, string.Empty) { }
+        public UpgradePropertyCommand(int playerId, string propertyId) : base(playerId)
+        {
+            PropertyId = propertyId ?? string.Empty;
+        }
+
+        public string PropertyId { get; }
     }
 
     public sealed class ChooseRouteCommand : GameCommand

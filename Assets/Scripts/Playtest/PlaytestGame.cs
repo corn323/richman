@@ -60,7 +60,6 @@ namespace Richman.Playtest
         {
             if (!CanAcceptAction()) return;
             var current = _session.State.GetPlayer(_session.State.CurrentPlayerId);
-            var fromTile = current.CurrentTileIndex;
             var result = _session.Execute(new RollDiceCommand(current.Id));
             if (!result.Succeeded)
             {
@@ -68,14 +67,22 @@ namespace Richman.Playtest
                 return;
             }
 
+            if (result.DiceResult == null)
+            {
+                _message = _session.State.LastEventMessage;
+                if (boardView != null) boardView.RefreshVisuals();
+                RenderHud();
+                return;
+            }
+
             _message = RichmanLocalization.Format("rolled", current.Id, result.DiceResult.Total);
             _presentationBusy = true;
             if (boardView != null) boardView.RefreshVisuals();
             RenderHud();
-            StartCoroutine(PlayRollAndMovement(current.Id, fromTile, result.DiceResult));
+            StartCoroutine(PlayRollAndMovement(current.Id, result.DiceResult, result.PathTileIndices));
         }
 
-        private IEnumerator PlayRollAndMovement(int playerId, int fromTile, DiceResult result)
+        private IEnumerator PlayRollAndMovement(int playerId, DiceResult result, System.Collections.Generic.IReadOnlyList<int> path)
         {
             var pawn = boardView == null ? null : boardView.GetPawn(playerId);
             if (cameraRig != null && pawn != null) cameraRig.Focus(pawn.transform);
@@ -84,7 +91,7 @@ namespace Richman.Playtest
             if (cameraRig != null && diceView != null) cameraRig.Focus(diceView.transform);
             if (diceView != null) yield return diceView.PlayRoll(result);
             if (cameraRig != null && pawn != null) cameraRig.Focus(pawn.transform);
-            if (boardView != null) yield return boardView.AnimatePawn(playerId, fromTile, result.Total);
+            if (boardView != null) yield return boardView.AnimatePawn(playerId, path);
 
             _presentationBusy = false;
             _message = DescribeLanding(playerId);
@@ -97,9 +104,9 @@ namespace Richman.Playtest
             ExecuteSimple(new BuyPropertyCommand(_session.State.CurrentPlayerId), RichmanLocalization.Text("purchased"));
         }
 
-        private void UpgradeProperty()
+        private void UpgradeProperty(string propertyId)
         {
-            ExecuteSimple(new UpgradePropertyCommand(_session.State.CurrentPlayerId), RichmanLocalization.Text("upgraded"));
+            ExecuteSimple(new UpgradePropertyCommand(_session.State.CurrentPlayerId, propertyId), RichmanLocalization.Text("upgraded"));
         }
 
         private void EndTurn()

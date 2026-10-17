@@ -116,22 +116,24 @@ namespace Richman.Presentation
             return tileViews[tileIndex].PawnAnchorPosition + BoardLayout.PawnOffset(playerId);
         }
 
-        public IEnumerator AnimatePawn(int playerId, int fromTileIndex, int stepCount)
+        public IEnumerator AnimatePawn(int playerId, IReadOnlyList<int> pathTileIndices)
         {
             var pawn = GetPawn(playerId);
-            if (pawn == null || _session == null) yield break;
+            if (pawn == null || _session == null || pathTileIndices == null) yield break;
 
             var start = pawn.transform.position;
-            for (var step = 1; step <= stepCount; step++)
+            for (var step = 0; step < pathTileIndices.Count; step++)
             {
-                var tileIndex = (fromTileIndex + step) % _session.Board.TileCount;
+                var tileIndex = pathTileIndices[step];
                 var target = PawnWorldPosition(tileIndex, playerId);
                 yield return MovePawn(pawn.transform, start, target, 0.16f);
                 start = target;
             }
 
             var player = _session.State.GetPlayer(playerId);
-            if (player != null) pawn.transform.position = PawnWorldPosition(player.CurrentTileIndex, player.Id);
+            if (player != null && pathTileIndices.Count > 0 && pathTileIndices[pathTileIndices.Count - 1] != player.CurrentTileIndex)
+                yield return MovePawn(pawn.transform, pawn.transform.position, PawnWorldPosition(player.CurrentTileIndex, player.Id), 0.42f);
+            else if (player != null && pathTileIndices.Count == 0) pawn.transform.position = PawnWorldPosition(player.CurrentTileIndex, player.Id);
         }
 
         private static IEnumerator MovePawn(Transform pawn, Vector3 from, Vector3 to, float duration)

@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Collections.Generic;
 using Richman.Core;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -29,6 +30,9 @@ namespace Richman.Presentation
         private Label _propertyRent;
         private Label _propertyUpgradeCost;
         private Label _propertyHeader;
+        private DropdownField _upgradeChoice;
+        private readonly List<string> _upgradeIds = new List<string>();
+        private Action<string> _upgradeAction;
         private Button _rollButton;
         private Button _buyButton;
         private Button _upgradeButton;
@@ -49,15 +53,16 @@ namespace Richman.Presentation
             _initialized = false;
         }
 
-        public void BindActions(Action roll, Action buy, Action upgrade, Action endTurn, Action newGame, Action<RichmanLanguage> languageChanged)
+        public void BindActions(Action roll, Action buy, Action<string> upgrade, Action endTurn, Action newGame, Action<RichmanLanguage> languageChanged)
         {
             if (!EnsureReferences()) return;
+            _upgradeAction = upgrade;
             _rollButton.clicked -= roll;
             _rollButton.clicked += roll;
             _buyButton.clicked -= buy;
             _buyButton.clicked += buy;
-            _upgradeButton.clicked -= upgrade;
-            _upgradeButton.clicked += upgrade;
+            _upgradeButton.clicked -= UpgradeSelected;
+            _upgradeButton.clicked += UpgradeSelected;
             _endTurnButton.clicked -= endTurn;
             _endTurnButton.clicked += endTurn;
             _newGameButton.clicked -= newGame;
@@ -71,6 +76,12 @@ namespace Richman.Presentation
             _languageZh.clicked += _setChinese;
             _languageEn.clicked += _setEnglish;
             _languageJa.clicked += _setJapanese;
+        }
+
+        private void UpgradeSelected()
+        {
+            if (_upgradeChoice != null && _upgradeChoice.index >= 0 && _upgradeChoice.index < _upgradeIds.Count)
+                _upgradeAction?.Invoke(_upgradeIds[_upgradeChoice.index]);
         }
 
         public void Render(GameState state, string message, bool busy)
@@ -94,10 +105,31 @@ namespace Richman.Presentation
             RenderStaticText();
             RenderPlayers(state);
             RenderOwnedProperties(state, current.Id);
+            RenderUpgradeChoices(state, current.Id);
             var tile = state.Board.GetTileAt(current.CurrentTileIndex);
             _currentTile.text = RichmanLocalization.Format("current-tile", RichmanLocalization.TileName(tile), RichmanLocalization.TileType(tile.Type));
             RenderPropertyPanel(state, tile);
             RenderButtons(state, busy);
+        }
+
+        private void RenderUpgradeChoices(GameState state, int playerId)
+        {
+            if (_upgradeChoice == null) return;
+            var selectedId = _upgradeChoice.index >= 0 && _upgradeChoice.index < _upgradeIds.Count ? _upgradeIds[_upgradeChoice.index] : string.Empty;
+            _upgradeIds.Clear();
+            _upgradeChoice.choices.Clear();
+            for (var i = 0; i < state.Properties.Count; i++)
+            {
+                var property = state.Properties[i];
+                if (property.OwnerId != playerId) continue;
+                var tile = state.Board.GetProperty(property.PropertyId);
+                if (tile == null || property.UpgradeLevel >= tile.RentLevels.Count - 1) continue;
+                _upgradeIds.Add(tile.Id);
+                _upgradeChoice.choices.Add(RichmanLocalization.TileName(tile) + " ($" + tile.UpgradeCost + ")");
+            }
+            _upgradeChoice.SetEnabled(_upgradeIds.Count > 0);
+            var selectedIndex = _upgradeIds.IndexOf(selectedId);
+            _upgradeChoice.index = selectedIndex >= 0 ? selectedIndex : (_upgradeIds.Count > 0 ? 0 : -1);
         }
 
         private bool EnsureReferences()
@@ -129,6 +161,12 @@ namespace Richman.Presentation
             _rollButton = root.Q<Button>("RollButton");
             _buyButton = root.Q<Button>("BuyButton");
             _upgradeButton = root.Q<Button>("UpgradeButton");
+            _upgradeChoice = root.Q<DropdownField>("UpgradePropertyChoice");
+            if (_upgradeChoice == null && _upgradeButton != null)
+            {
+                _upgradeChoice = new DropdownField("地產") { name = "UpgradePropertyChoice" };
+                _upgradeButton.parent.Insert(_upgradeButton.parent.IndexOf(_upgradeButton), _upgradeChoice);
+            }
             _endTurnButton = root.Q<Button>("EndTurnButton");
             _newGameButton = root.Q<Button>("NewGameButton");
             _languageZh = root.Q<Button>("LanguageZh");
@@ -148,6 +186,8 @@ namespace Richman.Presentation
                 var player = state.Players[i];
                 builder.Append(RichmanLocalization.Format("player.entry", player.Id, player.Money, player.CurrentTileIndex,
                     RichmanLocalization.PlayerStatus(player.Status)));
+                if (player.IsInPrison) builder.Append("  JAIL ").Append(player.PrisonAttemptsRemaining).Append(" tries");
+                else if (player.HospitalTurnsRemaining > 0) builder.Append("  HOSPITAL ").Append(player.HospitalTurnsRemaining).Append(" turns");
                 if (player.Id == state.CurrentPlayerId) builder.Append("  <");
                 if (i + 1 < state.Players.Count) builder.Append('\n');
             }

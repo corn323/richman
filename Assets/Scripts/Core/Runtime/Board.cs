@@ -377,7 +377,7 @@ namespace Richman.Core
                 case 6: return Property(index, id, "京都茶屋小徑", "japan", 170, 17, 68, new[] { 17, 34, 61, 102, 158 }, next);
                 case 7: return Simple(index, id, BoardTileType.Destiny, "命運・開放旅券", next);
                 case 8: return Property(index, id, "大阪道頓堀商店街", "japan", 190, 19, 76, new[] { 19, 38, 68, 114, 176 }, next);
-                case 9: return Simple(index, id, BoardTileType.Transit, "東海道新幹線站", next);
+                case 9: return Effect(index, id, BoardTileType.Hospital, "意外住院・東京醫療中心", 2, next);
                 case 10: return Simple(index, id, BoardTileType.Special, "香港天星小輪碼頭", next);
                 case 11: return Property(index, id, "香港太平山頂", "hong-kong", 210, 21, 84, new[] { 21, 42, 76, 126, 195 }, next);
                 case 12: return Effect(index, id, BoardTileType.Tax, "香港港口通行費", 90, next);
@@ -395,7 +395,7 @@ namespace Richman.Core
                 case 24: return Airport(index, id, "杜拜國際機場", "airport-jfk", next);
                 case 25: return Property(index, id, "羅馬競技場廣場", "italy", 240, 24, 96, new[] { 24, 48, 86, 144, 222 }, next);
                 case 26: return Property(index, id, "羅馬特拉斯提弗列", "italy", 225, 22, 90, new[] { 22, 44, 79, 132, 204 }, next);
-                case 27: return Property(index, id, "巴黎蒙馬特街區", "france", 250, 25, 100, new[] { 25, 50, 90, 150, 232 }, next);
+                case 27: return Effect(index, id, BoardTileType.Court, "巴黎國際法院", 100, next);
                 case 28: return Property(index, id, "羅浮宮花園", "france", 275, 27, 110, new[] { 27, 54, 97, 162, 250 }, next);
                 case 29: return Property(index, id, "倫敦西敏寺區", "london", 260, 26, 104, new[] { 26, 52, 94, 156, 240 }, next);
                 case 30: return Effect(index, id, BoardTileType.Prison, "倫敦監獄", 1, next);

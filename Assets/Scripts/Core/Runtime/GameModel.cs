@@ -113,6 +113,9 @@ namespace Richman.Core
         public PlayerStatus Status { get; private set; }
         public int DetainedTurnsRemaining { get; private set; }
         public string DetentionReason { get; private set; } = string.Empty;
+        public int HospitalTurnsRemaining { get; private set; }
+        public int PrisonAttemptsRemaining { get; private set; }
+        public bool IsInPrison => PrisonAttemptsRemaining > 0;
 
         internal void MoveTo(int tileIndex)
         {
@@ -155,6 +158,41 @@ namespace Richman.Core
             if (turns <= 0) throw new ArgumentOutOfRangeException(nameof(turns));
             DetentionReason = reason;
             DetainedTurnsRemaining = Math.Max(DetainedTurnsRemaining, turns);
+        }
+
+        internal void Hospitalize(int turns)
+        {
+            HospitalTurnsRemaining = Math.Max(HospitalTurnsRemaining, turns);
+            DetentionReason = "Hospital";
+            DetainedTurnsRemaining = HospitalTurnsRemaining;
+        }
+
+        internal void Imprison(int attempts)
+        {
+            PrisonAttemptsRemaining = Math.Max(PrisonAttemptsRemaining, attempts);
+            DetentionReason = "Prison";
+            DetainedTurnsRemaining = PrisonAttemptsRemaining;
+        }
+
+        internal void ServeHospitalTurn()
+        {
+            if (HospitalTurnsRemaining > 0) HospitalTurnsRemaining--;
+            DetainedTurnsRemaining = HospitalTurnsRemaining;
+            if (HospitalTurnsRemaining == 0) DetentionReason = string.Empty;
+        }
+
+        internal void FailPrisonAttempt()
+        {
+            if (PrisonAttemptsRemaining > 0) PrisonAttemptsRemaining--;
+            DetainedTurnsRemaining = PrisonAttemptsRemaining;
+            if (PrisonAttemptsRemaining == 0) DetentionReason = string.Empty;
+        }
+
+        internal void ReleaseFromPrison()
+        {
+            PrisonAttemptsRemaining = 0;
+            DetainedTurnsRemaining = 0;
+            DetentionReason = string.Empty;
         }
 
         internal string ServeDetainedTurn()
@@ -245,9 +283,11 @@ namespace Richman.Core
         public TurnPhase Phase { get; internal set; }
         public PendingAction PendingAction { get; internal set; }
         public DiceResult LastDiceResult { get; internal set; }
+        public DiceResult LastCourtDiceResult { get; internal set; }
         public MapCard LastDrawnCard { get; internal set; }
         public string LastEventMessage { get; internal set; } = string.Empty;
         public int MovementStepsRemaining { get; internal set; }
+        public bool CanUpgradeOwnedProperty { get; internal set; }
         public IReadOnlyList<string> RouteChoiceTileIds => _routeChoiceTileIdsView;
         public GameOutcome Outcome { get; internal set; }
 

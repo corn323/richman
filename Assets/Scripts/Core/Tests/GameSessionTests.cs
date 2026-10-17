@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Richman.Core;
@@ -126,6 +127,19 @@ namespace Richman.Core.Tests
             Assert.That(origin, Is.Not.Null);
             Assert.That(origin.AirportDestinationId, Is.EqualTo(destinationId));
             Assert.That(board.GetTile(origin.AirportDestinationId).Type, Is.EqualTo(BoardTileType.Airport));
+
+            var transferBoard = new BoardDefinition(new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("approach", BoardTileType.Rest, 1),
+                Airport(originId, 2, destinationId), Tile("runway", BoardTileType.Rest, 3),
+                Airport(destinationId, 4, originId), Tile("exit", BoardTileType.Rest, 5)
+            });
+            var transferSession = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), transferBoard.Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1)));
+            var transfer = transferSession.Execute(new RollDiceCommand(1));
+            Assert.That(transfer.Succeeded, Is.True);
+            Assert.That(transfer.PathTileIndices, Is.EqualTo(new[] { 1, 2 }));
+            Assert.That(transferSession.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(4));
         }
 
         [Test]
@@ -133,11 +147,11 @@ namespace Richman.Core.Tests
         {
             var session = CreateSession(
                 new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
-                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("hospital", BoardTileType.Hospital, 2, 1), Tile("rest-2", BoardTileType.Rest, 3) },
-                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1)));
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("hospital", BoardTileType.Hospital, 2, 2), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)));
 
             session.Execute(new RollDiceCommand(1));
-            Assert.That(session.State.GetPlayer(1).DetainedTurnsRemaining, Is.EqualTo(1));
+            Assert.That(session.State.GetPlayer(1).HospitalTurnsRemaining, Is.EqualTo(2));
             session.Execute(new EndTurnCommand(1));
             session.Execute(new RollDiceCommand(2));
             session.Execute(new EndTurnCommand(2));
@@ -145,29 +159,68 @@ namespace Richman.Core.Tests
 
             Assert.That(skipped.Succeeded, Is.True);
             Assert.That(skipped.DiceResult, Is.Null);
-            Assert.That(session.State.GetPlayer(1).DetainedTurnsRemaining, Is.Zero);
+            Assert.That(session.State.GetPlayer(1).HospitalTurnsRemaining, Is.EqualTo(1));
             Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingEndTurn));
             Assert.That(session.State.LastEventMessage, Does.Contain("skipped"));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            var secondSkipped = session.Execute(new RollDiceCommand(1));
+            Assert.That(secondSkipped.DiceResult, Is.Null);
+            Assert.That(session.State.GetPlayer(1).HospitalTurnsRemaining, Is.Zero);
         }
 
         [Test]
-        public void PrisonStaySkipsTwoTurnsAndCourtAppliesItsJudgmentFine()
+        public void PrisonRequiresDoublesAndAfterThreeFailedAttemptsChargesBail()
         {
             var prison = CreateSession(
                 new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
-                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("prison", BoardTileType.Prison, 2, 2), Tile("rest-2", BoardTileType.Rest, 3) },
-                new ScriptedDiceRoller(new DiceResult(1, 1)));
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("prison", BoardTileType.Prison, 2, 1), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 2), new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 1), new DiceResult(3, 4)));
             prison.Execute(new RollDiceCommand(1));
-            Assert.That(prison.State.GetPlayer(1).DetainedTurnsRemaining, Is.EqualTo(2));
+            Assert.That(prison.State.GetPlayer(1).PrisonAttemptsRemaining, Is.EqualTo(3));
+            prison.Execute(new EndTurnCommand(1)); prison.Execute(new RollDiceCommand(2)); prison.Execute(new EndTurnCommand(2));
+            Assert.That(prison.Execute(new RollDiceCommand(1)).PathTileIndices, Is.Empty);
+            prison.Execute(new EndTurnCommand(1)); prison.Execute(new RollDiceCommand(2)); prison.Execute(new EndTurnCommand(2));
+            Assert.That(prison.Execute(new RollDiceCommand(1)).PathTileIndices, Is.Empty);
+            prison.Execute(new EndTurnCommand(1)); prison.Execute(new RollDiceCommand(2)); prison.Execute(new EndTurnCommand(2));
+            var bail = prison.Execute(new RollDiceCommand(1));
+            Assert.That(bail.PathTileIndices, Is.Empty);
+            Assert.That(prison.State.GetPlayer(1).PrisonAttemptsRemaining, Is.Zero);
+            Assert.That(prison.State.GetPlayer(1).Money, Is.EqualTo(400));
+            Assert.That(prison.State.LastEventMessage, Does.Contain("$100"));
+        }
 
+        [Test]
+        public void CourtRollsForAcquittalAndAppliesOneRandomJudgment()
+        {
             var court = CreateSession(
                 new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
-                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("court", BoardTileType.Court, 2, 150), Tile("rest-2", BoardTileType.Rest, 3) },
-                new ScriptedDiceRoller(new DiceResult(1, 1)));
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Effect("court", BoardTileType.Court, 2, 100), Tile("rest-2", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(3, 4)));
             court.Execute(new RollDiceCommand(1));
+            Assert.That(court.State.LastCourtDiceResult.Total, Is.EqualTo(7));
+            Assert.That(court.State.GetPlayer(1).Money, Is.EqualTo(500));
+            Assert.That(court.State.LastEventMessage, Does.Contain("acquittal"));
+        }
 
-            Assert.That(court.State.GetPlayer(1).Money, Is.EqualTo(350));
-            Assert.That(court.State.LastEventMessage, Does.Contain("Court judgment"));
+        [TestCase(0, true)]
+        [TestCase(1, false)]
+        public void CourtLowRollSelectsPrisonOrOneHundredDollarFine(int judgment, bool prison)
+        {
+            var mode = new GameModeConfig("test", 2, 2, 500, 0, 50, 25);
+            var board = new BoardDefinition(new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1),
+                Effect("court", BoardTileType.Court, 2, 100), Tile("rest-2", BoardTileType.Rest, 3)
+            });
+            var session = new GameSession(mode, board, new[] { new PlayerSetup(1, "P1"), new PlayerSetup(2, "P2") },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1)),
+                new ScriptedRandom(0, 0, 0, 0, 0, 0, judgment));
+            session.Execute(new RollDiceCommand(1));
+            Assert.That(session.State.LastCourtDiceResult.Total, Is.EqualTo(2));
+            Assert.That(session.State.GetPlayer(1).PrisonAttemptsRemaining > 0, Is.EqualTo(prison));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(prison ? 500 : 400));
         }
 
         [Test]
@@ -180,9 +233,12 @@ namespace Richman.Core.Tests
 
             session.Execute(new RollDiceCommand(1));
 
-            Assert.That(session.State.LastDrawnCard.Id, Is.EqualTo("chance-festival-grant"));
-            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(580));
-            Assert.That(session.State.LastEventMessage, Does.Contain("Festival Grant"));
+            Assert.That(session.State.LastDrawnCard, Is.Not.Null);
+            Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Title));
+            if (session.State.LastDrawnCard.Effect == MapCardEffect.ReceiveMoney)
+                Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(500 + session.State.LastDrawnCard.Amount));
+            else if (session.State.LastDrawnCard.Effect == MapCardEffect.PayBank)
+                Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(500 - session.State.LastDrawnCard.Amount));
         }
 
         [Test]
@@ -333,11 +389,11 @@ namespace Richman.Core.Tests
             Assert.That(session.State.CurrentPlayerId, Is.EqualTo(1));
         }
 
-        private static GameSession CreateSession(GameModeConfig mode, IEnumerable<BoardTileDefinition> tiles, IDiceRoller diceRoller)
+        private static GameSession CreateSession(GameModeConfig mode, IEnumerable<BoardTileDefinition> tiles, IDiceRoller diceRoller, IGameRandom random = null)
         {
             var players = new List<PlayerSetup>();
             for (var i = 1; i <= mode.MaxPlayers; i++) players.Add(new PlayerSetup(i, "Player " + i));
-            return new GameSession(mode, new BoardDefinition(tiles), players, diceRoller);
+            return new GameSession(mode, new BoardDefinition(tiles), players, diceRoller, random);
         }
 
         private static BoardTileDefinition Tile(string id, BoardTileType type, int positionIndex)
@@ -348,6 +404,12 @@ namespace Richman.Core.Tests
         private static BoardTileDefinition Effect(string id, BoardTileType type, int positionIndex, int amount)
         {
             return new BoardTileDefinition(id, type, id, positionIndex, 0, 0, 0, null, string.Empty, id, amount);
+        }
+
+        private static BoardTileDefinition Airport(string id, int positionIndex, string destinationId)
+        {
+            return new BoardTileDefinition(id, BoardTileType.Airport, id, positionIndex, 0, 0, 0, null,
+                string.Empty, id, 0, null, true, null, destinationId);
         }
 
         private static BoardTileDefinition Property(string id, int price, int baseRent, int upgradeCost, int positionIndex, params int[] rents)
@@ -373,6 +435,17 @@ namespace Richman.Core.Tests
             {
                 if (_results.Count == 0) throw new System.InvalidOperationException("The scripted dice ran out of results.");
                 return _results.Dequeue();
+            }
+        }
+
+        private sealed class ScriptedRandom : IGameRandom
+        {
+            private readonly Queue<int> _values;
+            public ScriptedRandom(params int[] values) { _values = new Queue<int>(values); }
+            public int NextInt(int minInclusive, int maxExclusive)
+            {
+                var value = _values.Count == 0 ? 0 : _values.Dequeue();
+                return minInclusive + Math.Abs(value) % (maxExclusive - minInclusive);
             }
         }
     }

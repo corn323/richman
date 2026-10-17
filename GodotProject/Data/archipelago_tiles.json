@@ -240,8 +240,8 @@
     },
     {
       "id": "shinkansen-terminal",
-      "type": "Transit",
-      "display_name": "\u6771\u6D77\u9053\u65B0\u5E79\u7DDA\u7AD9",
+      "type": "Hospital",
+      "display_name": "\u610F\u5916\u4F4F\u9662\u30FB\u6771\u4EAC\u91AB\u7642\u4E2D\u5FC3",
       "position_index": 9,
       "position": {
         "x": 11.365277,
@@ -728,8 +728,8 @@
     },
     {
       "id": "paris-montmartre",
-      "type": "Property",
-      "display_name": "\u5DF4\u9ECE\u8499\u99AC\u7279\u8857\u5340",
+      "type": "Court",
+      "display_name": "\u5DF4\u9ECE\u570B\u969B\u6CD5\u9662",
       "position_index": 27,
       "position": {
         "x": -10.009947,
@@ -742,17 +742,11 @@
       ],
       "is_main_route": true,
       "rejoins_at": "",
-      "district": "france",
-      "price": 250,
-      "rent": 25,
-      "upgrade_cost": 100,
-      "rent_levels": [
-        25,
-        50,
-        90,
-        150,
-        232
-      ],
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": [],
       "airport_destination_id": ""
     },
     {

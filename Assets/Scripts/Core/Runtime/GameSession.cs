@@ -17,19 +17,23 @@ namespace Richman.Core
         {
             new MapCard("destiny-inheritance", "destiny", "Family Inheritance", "Collect $120.", MapCardEffect.ReceiveMoney, 120),
             new MapCard("destiny-tax-audit", "destiny", "Tax Audit", "Pay $100 to the bank.", MapCardEffect.PayBank, 100),
-            new MapCard("destiny-hospital", "destiny", "Recovery Order", "Spend one turn in hospital.", MapCardEffect.Hospitalize, 1),
-            new MapCard("destiny-prison", "destiny", "Court Summons", "Spend one turn in prison.", MapCardEffect.Imprison, 1)
+            new MapCard("destiny-hospital", "destiny", "Recovery Order", "Skip two full turns in hospital.", MapCardEffect.Hospitalize, 2),
+            new MapCard("destiny-prison", "destiny", "Court Summons", "Roll doubles to escape prison, up to three attempts.", MapCardEffect.Imprison, 3)
         };
 
         private readonly IDiceRoller _diceRoller;
-        private int _chanceCardIndex;
-        private int _destinyCardIndex;
+        private readonly IGameRandom _random;
+        private readonly MapCard[] _chanceDeck;
+        private readonly MapCard[] _destinyDeck;
 
-        public GameSession(GameModeConfig mode, BoardDefinition board, IReadOnlyList<PlayerSetup> playerSetups, IDiceRoller diceRoller)
+        public GameSession(GameModeConfig mode, BoardDefinition board, IReadOnlyList<PlayerSetup> playerSetups, IDiceRoller diceRoller, IGameRandom random = null)
         {
             Mode = mode ?? throw new ArgumentNullException(nameof(mode));
             Board = board ?? throw new ArgumentNullException(nameof(board));
             _diceRoller = diceRoller ?? throw new ArgumentNullException(nameof(diceRoller));
+            _random = random ?? new SeededRandom(Environment.TickCount);
+            _chanceDeck = Shuffle(ChanceCards, _random);
+            _destinyDeck = Shuffle(DestinyCards, _random);
             if (playerSetups == null) throw new ArgumentNullException(nameof(playerSetups));
             if (playerSetups.Count < mode.MinPlayers || playerSetups.Count > mode.MaxPlayers)
             {
@@ -58,6 +62,19 @@ namespace Richman.Core
         public BoardDefinition Board { get; }
         public GameState State { get; }
 
+        private static MapCard[] Shuffle(MapCard[] cards, IGameRandom random)
+        {
+            var shuffled = (MapCard[])cards.Clone();
+            for (var i = shuffled.Length - 1; i > 0; i--)
+            {
+                var j = random.NextInt(0, i + 1);
+                var card = shuffled[i];
+                shuffled[i] = shuffled[j];
+                shuffled[j] = card;
+            }
+            return shuffled;
+        }
+
         public CommandResult Execute(GameCommand command)
         {
             if (command == null) return CommandResult.Failure(CommandErrorCode.InvalidCommand, "A command is required.");
@@ -68,7 +85,7 @@ namespace Richman.Core
             if (player.Status != PlayerStatus.Active) return CommandResult.Failure(CommandErrorCode.PlayerEliminated, "The player is no longer active.");
             if (command is RollDiceCommand) return ExecuteRoll(player);
             if (command is BuyPropertyCommand) return ExecuteBuy(player);
-            if (command is UpgradePropertyCommand) return ExecuteUpgrade(player);
+            if (command is UpgradePropertyCommand upgrade) return ExecuteUpgrade(player, upgrade);
             if (command is ChooseRouteCommand chooseRoute) return ExecuteChooseRoute(player, chooseRoute);
             if (command is EndTurnCommand) return ExecuteEndTurn(player);
             return CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
@@ -84,17 +101,47 @@ namespace Richman.Core
             }
 
             State.LastDrawnCard = null;
+            State.LastCourtDiceResult = null;
             State.LastEventMessage = string.Empty;
             State.MovementStepsRemaining = 0;
             State.SetRouteChoices(null);
-            if (player.DetainedTurnsRemaining > 0)
+            State.CanUpgradeOwnedProperty = false;
+            if (player.IsInPrison)
             {
-                var reason = player.ServeDetainedTurn();
+                var prisonFrom = player.CurrentTileIndex;
+                var prisonDice = _diceRoller.Roll();
+                State.LastDiceResult = prisonDice;
+                State.PendingAction = PendingAction.None;
+                State.Phase = TurnPhase.AwaitingEndTurn;
+                if (prisonDice.First == prisonDice.Second)
+                {
+                    player.ReleaseFromPrison();
+                    State.Phase = TurnPhase.AwaitingRoll;
+                    State.LastEventMessage = "Doubles released you from prison; move this turn.";
+                    State.MovementStepsRemaining = prisonDice.Total;
+                    var prisonPath = new List<int>(prisonDice.Total);
+                    ContinueMovement(player, prisonPath);
+                    if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+                    return CommandResult.Success(prisonDice, prisonFrom, player.CurrentTileIndex, prisonPath.AsReadOnly());
+                }
+
+                player.FailPrisonAttempt();
+                if (!player.IsInPrison)
+                {
+                    PayToBank(player, 100);
+                    State.LastEventMessage = "Three failed prison attempts; $100 bail paid. You are released.";
+                }
+                else State.LastEventMessage = "Prison escape failed; " + player.PrisonAttemptsRemaining + " attempt(s) remain.";
+                State.Phase = TurnPhase.AwaitingEndTurn;
+                return CommandResult.Success(prisonDice, prisonFrom, player.CurrentTileIndex, Array.Empty<int>());
+            }
+            if (player.HospitalTurnsRemaining > 0)
+            {
+                player.ServeHospitalTurn();
                 State.LastDiceResult = null;
                 State.PendingAction = PendingAction.None;
                 State.Phase = TurnPhase.AwaitingEndTurn;
-                State.MovementStepsRemaining = 0;
-                State.LastEventMessage = reason + " stay: this turn is skipped" + (player.DetainedTurnsRemaining > 0 ? " (" + player.DetainedTurnsRemaining + " turn(s) left)." : ". Released.");
+                State.LastEventMessage = "Hospital stay: this turn is skipped (" + player.HospitalTurnsRemaining + " turn(s) left).";
                 return CommandResult.Success();
             }
 
@@ -188,18 +235,20 @@ namespace Richman.Core
             return CommandResult.Success();
         }
 
-        private CommandResult ExecuteUpgrade(PlayerState player)
+        private CommandResult ExecuteUpgrade(PlayerState player, UpgradePropertyCommand command)
         {
             var turnCheck = ValidateCurrentPlayer(player);
             if (turnCheck != null) return turnCheck;
-            if (State.Phase != TurnPhase.AwaitingAction || State.PendingAction != PendingAction.UpgradeProperty)
+            var startUpgrade = State.CanUpgradeOwnedProperty &&
+                (State.Phase == TurnPhase.AwaitingAction || State.Phase == TurnPhase.AwaitingEndTurn);
+            if ((State.Phase != TurnPhase.AwaitingAction || State.PendingAction != PendingAction.UpgradeProperty) && !startUpgrade)
             {
                 return CommandResult.Failure(CommandErrorCode.InvalidPhase, "There is no property available to upgrade right now.");
             }
 
-            var tile = Board.GetTileAt(player.CurrentTileIndex);
-            var property = State.GetProperty(tile.Id);
-            if (property == null || property.OwnerId != player.Id)
+            var tile = string.IsNullOrEmpty(command.PropertyId) ? Board.GetTileAt(player.CurrentTileIndex) : Board.GetTile(command.PropertyId);
+            var property = tile == null ? null : State.GetProperty(tile.Id);
+            if (tile == null || property == null || property.OwnerId != player.Id)
             {
                 return CommandResult.Failure(CommandErrorCode.PropertyUnavailable, "The player does not own this property.");
             }
@@ -214,6 +263,7 @@ namespace Richman.Core
 
             player.Spend(tile.UpgradeCost);
             property.Upgrade();
+            State.CanUpgradeOwnedProperty = false;
             State.PendingAction = PendingAction.None;
             State.Phase = TurnPhase.AwaitingEndTurn;
             return CommandResult.Success();
@@ -247,6 +297,7 @@ namespace Richman.Core
 
         private void ResolveLanding(PlayerState player, BoardTileDefinition tile)
         {
+            State.CanUpgradeOwnedProperty = tile.Type == BoardTileType.Start;
             switch (tile.Type)
             {
                 case BoardTileType.Property:
@@ -263,23 +314,33 @@ namespace Richman.Core
                     ResolveAirport(player, tile);
                     break;
                 case BoardTileType.Hospital:
-                    player.Detain("Hospital", tile.EffectAmount > 0 ? tile.EffectAmount : 1);
-                    State.LastEventMessage = "Unexpected admission: " + player.DetainedTurnsRemaining + " turn(s) in hospital.";
+                    player.Hospitalize(tile.EffectAmount > 0 ? tile.EffectAmount : 2);
+                    State.LastEventMessage = "Unexpected admission: " + player.HospitalTurnsRemaining + " full turn(s) in hospital.";
                     break;
                 case BoardTileType.Prison:
-                    player.Detain("Prison", tile.EffectAmount > 0 ? tile.EffectAmount : 2);
-                    State.LastEventMessage = "Sent to prison: " + player.DetainedTurnsRemaining + " turn(s) to serve.";
+                    player.Imprison(3);
+                    State.LastEventMessage = "Sent to prison: roll doubles to escape, up to three attempts.";
                     break;
                 case BoardTileType.Court:
-                    var fine = tile.EffectAmount > 0 ? tile.EffectAmount : Mode.TaxAmount;
-                    PayToBank(player, fine);
-                    State.LastEventMessage = "Court judgment: paid $" + fine + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
+                    var courtDice = _diceRoller.Roll();
+                    State.LastCourtDiceResult = courtDice;
+                    if (courtDice.Total >= 7) State.LastEventMessage = "Court acquittal: rolled " + courtDice.Total + ".";
+                    else if (_random.NextInt(0, 2) == 0)
+                    {
+                        player.Imprison(3);
+                        State.LastEventMessage = "Court judgment: rolled " + courtDice.Total + "; sent to prison.";
+                    }
+                    else
+                    {
+                        PayToBank(player, 100);
+                        State.LastEventMessage = "Court judgment: rolled " + courtDice.Total + "; paid $100" + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
+                    }
                     break;
                 case BoardTileType.Chance:
-                    DrawCard(player, ChanceCards, ref _chanceCardIndex);
+                    DrawCard(player, _chanceDeck, "chance");
                     break;
                 case BoardTileType.Destiny:
-                    DrawCard(player, DestinyCards, ref _destinyCardIndex);
+                    DrawCard(player, _destinyDeck, "destiny");
                     break;
             }
 
@@ -295,11 +356,12 @@ namespace Richman.Core
             State.LastEventMessage = "機場航線：「" + airport.DisplayName + "」飛往「" + destination.DisplayName + "」。";
         }
 
-        private void DrawCard(PlayerState player, MapCard[] deck, ref int drawIndex)
+        private void DrawCard(PlayerState player, MapCard[] deck, string deckId)
         {
             if (deck == null || deck.Length == 0) throw new InvalidOperationException("A map card deck cannot be empty.");
-            var card = deck[drawIndex % deck.Length];
-            drawIndex = (drawIndex + 1) % deck.Length;
+            var card = deck[0];
+            Array.Copy(deck, 1, deck, 0, deck.Length - 1);
+            deck[deck.Length - 1] = card;
             State.LastDrawnCard = card;
 
             switch (card.Effect)
@@ -311,16 +373,16 @@ namespace Richman.Core
                     PayToBank(player, card.Amount);
                     break;
                 case MapCardEffect.Hospitalize:
-                    player.Detain("Hospital", card.Amount);
+                    player.Hospitalize(card.Amount);
                     break;
                 case MapCardEffect.Imprison:
-                    player.Detain("Prison", card.Amount);
+                    player.Imprison(3);
                     break;
                 default:
                     throw new InvalidOperationException("Unsupported map card effect: " + card.Effect);
             }
 
-            State.LastEventMessage = card.DeckId.ToUpperInvariant() + " CARD — " + card.Title + ": " + card.Description;
+            State.LastEventMessage = deckId.ToUpperInvariant() + " CARD — " + card.Title + ": " + card.Description;
         }
 
         private void ResolveProperty(PlayerState player, BoardTileDefinition tile)
@@ -417,6 +479,7 @@ namespace Richman.Core
         private void AdvanceTurn()
         {
             if (State.Phase == TurnPhase.Finished) return;
+            State.CanUpgradeOwnedProperty = false;
             CheckVictory();
             if (State.Phase == TurnPhase.Finished) return;
             if (State.TurnNumber >= Mode.TurnLimit)
@@ -516,7 +579,8 @@ namespace Richman.Core
                 players.Add(new PlayerSetup(playerId, "Player " + playerId));
             }
 
-            return new GameSession(mode, PrototypeBoardFactory.Create(), players, new SeededDiceRoller(seed));
+            var random = new SeededRandom(seed);
+            return new GameSession(mode, PrototypeBoardFactory.Create(), players, new SeededDiceRoller(random), random);
         }
     }
 }

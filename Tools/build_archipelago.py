@@ -10,12 +10,25 @@ os.makedirs(ASSET, exist_ok=True); os.makedirs(DATA, exist_ok=True)
 
 # Preserve all existing objects and add the map to its own categorized collections.
 scene = bpy.context.scene
+def remove_map_object(obj, owner_collection):
+    other_scene_users=[user_scene for user_scene in obj.users_scene if user_scene != scene]
+    if other_scene_users:
+        owner_collection.objects.unlink(obj)
+        return
+    object_type=obj.type
+    data=obj.data
+    bpy.data.objects.remove(obj, do_unlink=True)
+    if data is not None and data.users == 0:
+        if object_type == 'MESH': bpy.data.meshes.remove(data)
+        elif object_type in ('CURVE','FONT'): bpy.data.curves.remove(data)
+        elif object_type == 'LIGHT': bpy.data.lights.remove(data)
+        elif object_type == 'CAMERA': bpy.data.cameras.remove(data)
 for old_collection in list(scene.collection.children):
     if old_collection.name.startswith(('Terrain', 'River and Sea', 'MainRoute', 'Landmarks', 'Buildings', 'Decorations', 'ChanceDecks')):
-        for old_object in list(old_collection.objects): old_collection.objects.unlink(old_object)
+        for old_object in list(old_collection.objects): remove_map_object(old_object, old_collection)
 for old_object in list(scene.objects):
     if old_object.name.startswith(('Large softbox', 'Ocean fill', 'Isometric map camera')):
-        if old_object.name in scene.collection.objects: scene.collection.objects.unlink(old_object)
+        if old_object.name in scene.collection.objects: remove_map_object(old_object, scene.collection)
 with open(os.path.join(DATA, 'archipelago_tiles.json'), encoding='utf-8') as source:
     CORE_MAP = json.load(source)
 CORE_TILES = CORE_MAP['tiles']
@@ -35,7 +48,7 @@ def collection(name):
 terrain=collection('Terrain'); water=collection('River and Sea'); route=collection('MainRoute - 36 stable tile sockets'); landmarks=collection('Landmarks'); buildings=collection('Buildings'); deco=collection('Decorations'); decks=collection('ChanceDecks')
 MAP_COLLECTIONS={terrain,water,route,landmarks,buildings,deco,decks}
 def mat(name, color, rough=0.78, metal=0):
-    m=bpy.data.materials.new(name); m.diffuse_color=(*color,1); m.use_nodes=True
+    m=bpy.data.materials.get(name) or bpy.data.materials.new(name); m.diffuse_color=(*color,1); m.use_nodes=True
     p=next(n for n in m.node_tree.nodes if n.type=='BSDF_PRINCIPLED'); p.inputs['Base Color'].default_value=(*color,1); p.inputs['Roughness'].default_value=rough; p.inputs['Metallic'].default_value=metal
     return m
 grass=mat('Island grass',(.26,.58,.32)); grass2=mat('Highland meadow',(.49,.71,.34)); cliff=mat('Warm limestone',(.67,.51,.34)); sand=mat('Shore sand',(.92,.75,.43)); sea=mat('Deep turquoise water',(.035,.35,.52),.3); river=mat('Bright canal',(.08,.58,.72),.25); road=mat('Cream promenade',(.91,.80,.60)); roadedge=mat('Terracotta road edge',(.64,.31,.19)); white=mat('Porcelain',(.94,.91,.82)); roofred=mat('Coral roofs',(.86,.25,.17)); roofblue=mat('Teal roofs',(.12,.42,.49)); roofgold=mat('Golden roofs',(.94,.60,.17)); glass=mat('Blue glass',(.22,.60,.76),.22); green=mat('Canopy',(.12,.38,.20)); green2=mat('Canopy light',(.34,.61,.23)); trunk=mat('Tree bark',(.30,.18,.11)); dark=mat('Ink navy',(.07,.13,.21)); pink=mat('Chance lavender',(.63,.30,.79)); fate=mat('Destiny blue',(.16,.40,.78)); red=mat('Airport orange',(.95,.34,.12)); gold=mat('Start gold',(1,.73,.12),.45,.15); white2=mat('White',(.98,.97,.88)); yellow=mat('Window glow',(1,.78,.29),.42)
@@ -133,6 +146,14 @@ for idx,(cx,cz,sx,sz) in enumerate(((-.2,.2,4.8,3.4),(0,0,6.6,5.0))):
         a=2*math.pi*j/96; pts.append((cx+sx*math.cos(a)+.2*math.sin(3*a),.20,cz+sz*math.sin(a)))
     tube('CanalBank_%d'%idx,pts,.27,sand,water,True)
     tube('CanalWater_%d'%idx,[(x,.23,z) for x,_,z in pts],.18,river,water,True)
+# Two arched pedestrian bridges cross the canal rings and keep the inner garden reachable.
+for side in (-1,1):
+    bx=side*5.65
+    cube('CanalBridge_%s stone deck'%('West' if side<0 else 'East'),(bx,.55,0),(2.35,.22,.92),sand,landmarks,.12)
+    for zoff in (-.43,.43):
+        tube('CanalBridge_%s handrail'%('West' if side<0 else 'East'),[(bx-1.05,.76,zoff),(bx-.55,1.02,zoff),(bx,1.10,zoff),(bx+.55,1.02,zoff),(bx+1.05,.76,zoff)],.055,white,landmarks)
+    for xoff in (-.86,.86):
+        cyl('CanalBridge %s pier'%('West' if side<0 else 'East'),(bx+xoff,.35,0),.12,.56,cliff,landmarks,10)
 # central garden island and plaza
 island(0,0,2.7,2.15,1.20,41,grass2)
 cyl('Central Fountain Basin',(0,1.28,0),1.02,.18,glass,landmarks,32)
@@ -202,15 +223,16 @@ for j in range(12):
     a=math.tau*j/12; x=cx+1.39*math.cos(a); z=cz+1.39*math.sin(a)
     cube('Arena arch pier',(x,1.48,z),(.18,.62,.18),white,landmarks,.04)
 # Hospital and prison / courthouse with silhouette-specific forms.
-def route_position(tile_type, fallback_index):
+def route_position(tile_type):
     tile=next((t for t in CORE_TILES if t['type']==tile_type),None)
-    p=tile['position'] if tile else CORE_TILES[fallback_index]['position']; return p['x'],p['z']
-hx,hz=route_position('Hospital',5); cube('Hospital main block',(hx,2.0,hz), (1.9,2.35,1.35),white,landmarks,.13)
+    if tile is None: raise ValueError('Required Core route tile is missing: '+tile_type)
+    p=tile['position']; return p['x'],p['z']
+hx,hz=route_position('Hospital'); cube('Hospital main block',(hx,2.0,hz), (1.9,2.35,1.35),white,landmarks,.13)
 cube('Hospital red cross horizontal',(hx,3.5,hz-.72),(1.05,.23,.09),roofred,landmarks,.025); cube('Hospital red cross vertical',(hx,3.5,hz-.72),(.23,1.05,.09),roofred,landmarks,.025)
 for xoff in (-.58,0,.58): cube('Hospital window',(hx+xoff,2.6,hz-.70),(.22,.28,.05),glass,landmarks,.025)
-px,pz=route_position('Prison',30); cube('Prison keep',(px,1.75,pz),(1.7,1.6,1.25),dark,landmarks,.08)
+px,pz=route_position('Prison'); cube('Prison keep',(px,1.75,pz),(1.7,1.6,1.25),dark,landmarks,.08)
 for xoff in (-.42,-.14,.14,.42): cube('Prison bar',(px+xoff,1.7,pz-.67),(.045,.72,.04),white2,landmarks,.01)
-cx,cz=route_position('Court',27); cube('Court marble hall',(cx,1.42,cz),(2.0,1.48,1.4),white,landmarks,.08)
+cx,cz=route_position('Court'); cube('Court marble hall',(cx,1.42,cz),(2.0,1.48,1.4),white,landmarks,.08)
 for xoff in (-.7,-.24,.24,.7): cyl('Courthouse column',(cx+xoff,1.7,cz-.73),.12,1.15,white,landmarks,12)
 cyl('Courthouse pediment',(cx,2.36,cz-.72),1.12,.5,roofgold,landmarks,3,0)
 # airports and aircraft are on route side but offset behind the tile
@@ -218,7 +240,7 @@ for idx in [t['position_index'] for t in CORE_TILES[:n] if t['type']=='Airport']
     x,z=coords[idx]; cube('Airfield apron',(x,1.0,z+1.65),(3.2,.12,2.0),dark,landmarks,.12)
     label('Airport runway marking','✈',(x,1.09,z+1.65),.76,white2,landmarks)
     # stylized aircraft: fuselage, wings, tail, twin engines
-    cube('Airliner fuselage',(x,1.55,z+2.0),(.42,2.5,.48),white2,landmarks,.18)
+    cube('Airliner fuselage',(x,1.55,z+2.0),(.42,.48,2.5),white2,landmarks,.18)
     cube('Airliner swept wings',(x,1.49,z+2.03),(2.55,.20,.62),white,landmarks,.14)
     cube('Airliner tailplane',(x,1.62,z+3.02),(1.0,.15,.32),white,landmarks,.08)
     cube('Airliner coral tail',(x,1.83,z+3.06),(.42,.85,.14),roofred,landmarks,.06)

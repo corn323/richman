@@ -124,9 +124,9 @@ namespace Richman.GodotPresentation
             Execute(new BuyPropertyCommand(_session.State.CurrentPlayerId), "Property purchased.");
         }
 
-        private void Upgrade()
+        private void Upgrade(string propertyId)
         {
-            Execute(new UpgradePropertyCommand(_session.State.CurrentPlayerId), "Property upgraded.");
+            Execute(new UpgradePropertyCommand(_session.State.CurrentPlayerId, propertyId), "Property upgraded.");
         }
 
         private void EndTurn()
