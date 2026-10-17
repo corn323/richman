@@ -142,8 +142,19 @@ jobs:
         shell: pwsh
         run: |
           $gameExecutable = (Resolve-Path "GodotProject/build/Richman-Windows-x64/Richman.exe").Path
-          $gameRun = Start-Process -FilePath $gameExecutable -ArgumentList @("--headless", "--", "--test-pawn-move") -NoNewWindow -Wait -PassThru
-          if ($gameRun.ExitCode -ne 0) { throw "Exported game startup or pawn movement failed with exit code $($gameRun.ExitCode)." }
+          $stdout = Join-Path $env:RUNNER_TEMP "richman-smoke.stdout.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "richman-smoke.stderr.log"
+          $gameRun = Start-Process -FilePath $gameExecutable -ArgumentList @("--headless", "--", "--test-pawn-move") -NoNewWindow -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $gameRun.WaitForExit(120000)) {
+            $gameRun.Kill($true)
+            $diagnostic = @((Get-Content -LiteralPath $stdout -Tail 30 -ErrorAction SilentlyContinue) + (Get-Content -LiteralPath $stderr -Tail 30 -ErrorAction SilentlyContinue)) -join "`n"
+            throw "Exported game smoke test timed out after 120 seconds. Output: $diagnostic"
+          }
+          if ($gameRun.ExitCode -ne 0) {
+            $diagnostic = @((Get-Content -LiteralPath $stdout -Tail 30 -ErrorAction SilentlyContinue) + (Get-Content -LiteralPath $stderr -Tail 30 -ErrorAction SilentlyContinue)) -join "`n"
+            throw "Exported game startup or pawn movement failed with exit code $($gameRun.ExitCode). Output: $diagnostic"
+          }
+          if (-not (Select-String -LiteralPath $stdout -Pattern "GODOT_PAWN_MOVE_OK" -Quiet)) { throw "Exported game exited successfully without the GODOT_PAWN_MOVE_OK marker." }
 
       - name: Package and verify playtest ZIP
         shell: pwsh
