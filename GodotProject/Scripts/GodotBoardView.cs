@@ -17,12 +17,10 @@ namespace Richman.GodotPresentation
             _board = board;
             var root = new Node3D { Name = "ImportedWorldTour" };
             AddChild(root);
-            var gltf = new GltfDocument();
-            var gltfState = new GltfState();
-            var gltfError = gltf.AppendFromFile(ProjectSettings.GlobalizePath("res://Assets/archipelago_map.glb"), gltfState);
-            if (gltfError != Error.Ok) throw new InvalidDataException("Godot GLB load failed: " + gltfError);
-            var model = gltf.GenerateScene(gltfState);
-            if (model == null) throw new InvalidDataException("Godot could not create a scene from archipelago_map.glb.");
+            var importedMap = GD.Load<PackedScene>("res://Assets/archipelago_map.glb");
+            if (importedMap == null) throw new InvalidDataException("Godot could not load the imported archipelago_map.glb scene.");
+            var model = importedMap.Instantiate<Node3D>();
+            if (model == null) throw new InvalidDataException("Godot could not instantiate archipelago_map.glb.");
             root.AddChild(model);
             foreach (var pattern in new[] { "TileSocket_*", "TileTop_*", "DistrictBand_*", "TileLabel_*", "Icon_*" })
                 foreach (var child in model.FindChildren(pattern, "Node3D", true, false))
