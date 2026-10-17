@@ -49,7 +49,7 @@ namespace Richman.Playtest
             if (boardView != null) boardView.Bind(_session);
             if (gameplayHud != null)
             {
-                gameplayHud.BindActions(RollDice, BuyProperty, UpgradeProperty, EndTurn, StartNewGame, SetLanguage);
+                gameplayHud.BindActions(RollDice, BuyProperty, UpgradeProperty, ChooseRoute, EndTurn, StartNewGame, SetLanguage);
                 gameplayHud.Render(_session.State, _message, false);
             }
 
@@ -94,7 +94,9 @@ namespace Richman.Playtest
             if (boardView != null) yield return boardView.AnimatePawn(playerId, path);
 
             _presentationBusy = false;
-            _message = DescribeLanding(playerId);
+            _message = string.IsNullOrEmpty(_session.State.LastEventMessage)
+                ? DescribeLanding(playerId)
+                : _session.State.LastEventMessage;
             if (boardView != null) boardView.RefreshVisuals();
             RenderHud();
         }
@@ -107,6 +109,35 @@ namespace Richman.Playtest
         private void UpgradeProperty(string propertyId)
         {
             ExecuteSimple(new UpgradePropertyCommand(_session.State.CurrentPlayerId, propertyId), RichmanLocalization.Text("upgraded"));
+        }
+
+        private void ChooseRoute(string nextTileId)
+        {
+            if (!CanAcceptAction()) return;
+            var playerId = _session.State.CurrentPlayerId;
+            var result = _session.Execute(new ChooseRouteCommand(playerId, nextTileId));
+            if (!result.Succeeded)
+            {
+                ShowError(RichmanLocalization.CommandError(result.ErrorCode, result.ErrorMessage));
+                return;
+            }
+
+            _presentationBusy = true;
+            if (boardView != null) boardView.RefreshVisuals();
+            RenderHud();
+            StartCoroutine(PlayChosenRoute(playerId, result.PathTileIndices));
+        }
+
+        private IEnumerator PlayChosenRoute(int playerId, System.Collections.Generic.IReadOnlyList<int> path)
+        {
+            if (boardView != null) yield return boardView.AnimatePawn(playerId, path);
+
+            _presentationBusy = false;
+            _message = string.IsNullOrEmpty(_session.State.LastEventMessage)
+                ? DescribeLanding(playerId)
+                : _session.State.LastEventMessage;
+            if (boardView != null) boardView.RefreshVisuals();
+            RenderHud();
         }
 
         private void EndTurn()

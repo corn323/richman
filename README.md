@@ -9,7 +9,7 @@ Richman 是一款原創的 3D Low-Poly Toy City 地產桌遊。玩家在一座�
 目前完成 M0、M1、M1.5 Unity 參考版本，並開始 Godot 4.7.2 .NET 跨平台移植：
 
 - 純 C# Richman.Core：棋盤、玩家、回合、骰子、金錢、地產、租金、升級、破產與勝利。
-- 36 格原創棋盤，資料由 PrototypeBoardFactory 建立，規則不依賴 Scene。
+- Godot 旅遊棋盤有 41 格閉環主路線、3 條合流支線與 48 個總地格；巴黎蒙馬特保留為可購買地產，法院另設為正式遊戲格。
 - 可編輯的 3D Gameplay Scene、Tile、Property、Pawn、Dice、Miniature City、Camera Rig 與 UI Toolkit HUD。
 - 四人同機熱座遊玩，包含逐格移動、骰子動畫、所有權標記、建築等級變化、收租與勝利結果。
 - 遊戲內語言切換：繁中、English、日本語。
@@ -21,7 +21,7 @@ Richman 是一款原創的 3D Low-Poly Toy City 地產桌遊。玩家在一座�
 
 ### Godot 版本（目前移植入口）
 
-使用 Godot 4.7.2 `.NET / Mono` 開啟 `GodotProject`，按 Play 執行 `Scenes/Main.tscn`。需要 .NET SDK 與 Godot Export Templates。
+使用 Godot 4.7.2 `.NET / Mono` 開啟 `GodotProject`，按 Play 執行 `Scenes/Main.tscn`。開發建置需要 .NET 10 SDK 與 Godot Export Templates。
 
 ### Unity 參考版本
 
@@ -53,7 +53,17 @@ Richman.Core 是 authoritative game state 的唯一規則來源。Presentation �
 
 ## 測試與建置
 
-Core 測試位於 Assets/Scripts/Core/Tests，可在 Unity Test Runner 執行 EditMode tests。
+Core 測試位於 `Assets/Scripts/Core/Tests/GameSessionTests.cs`，可直接使用獨立 NUnit 專案執行：
+
+```text
+dotnet test Assets/Scripts/Core/Tests/Richman.Core.Tests.csproj --configuration Release
+```
+
+GitHub Actions 工作流程 `.github/workflows/ci-release.yml` 會在對 master 的 Pull Request、推送 master 及 `v*` 標籤時執行 Core NUnit 測試、Core/Simulation/Godot Release 建置和模擬自測。master 推送與標籤推送也會在 Windows runner 匯出、冒煙測試並上傳 `Richman-Windows-x64.zip`。
+
+推送到 master 後，可在 GitHub Actions 的該次工作執行頁下載 `Richman-Windows-x64` artifact。建立並推送 `v*` 標籤（例如 `v1.0.0`）會在所有驗證與打包成功後建立 GitHub Release，附上相同 ZIP 與自動產生的 Release Notes。PR 只執行驗證，不需要 Release 寫入權限。
+
+Windows 測試版包含 `PLAYTEST_README.txt` 和 `BUILD_INFO.txt`。Godot 官方 .NET 匯出模板會提供已編譯遊戲所需的 .NET runtime 元件，玩家不需要安裝 Godot Editor 或 .NET SDK。
 
 在 Unity Editor 選單執行：
 

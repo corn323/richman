@@ -1,0 +1,176 @@
+name: Richman CI and Windows Release
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Tests and Release builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run linked Core NUnit tests
+        run: dotnet test Assets/Scripts/Core/Tests/Richman.Core.Tests.csproj --configuration Release
+
+      - name: Build standalone Core
+        run: dotnet build Richman.Core.Standalone.csproj --configuration Release --no-restore
+
+      - name: Build simulation harness
+        run: dotnet build Tools/Simulation/Richman.Simulation.csproj --configuration Release --no-restore
+
+      - name: Run Core simulation verification
+        run: dotnet run --no-build --configuration Release --project Tools/Simulation/Richman.Simulation.csproj -- --self-test
+
+      - name: Build Godot 4.7.2 .NET project
+        run: dotnet build GodotProject/Richman.Godot.csproj --configuration Release
+
+  windows-playtest:
+    name: Export and smoke test Windows playtest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download Godot 4.7.2 .NET editor and templates
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "richman-godot"
+          $editorZip = Join-Path $work "godot-mono.zip"
+          $templatesZip = Join-Path $work "godot-templates.zip"
+          $editorDir = Join-Path $work "editor"
+          $templateDir = Join-Path $work "templates"
+          New-Item -ItemType Directory -Force -Path $work, $editorDir, $templateDir | Out-Null
+          Invoke-WebRequest "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_win64.zip" -OutFile $editorZip
+          Invoke-WebRequest "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_export_templates.tpz" -OutFile $templatesZip
+          Expand-Archive -LiteralPath $editorZip -DestinationPath $editorDir -Force
+          Expand-Archive -LiteralPath $templatesZip -DestinationPath $templateDir -Force
+          $godot = Join-Path $editorDir "Godot_v4.7.2-stable_mono_win64.exe"
+          if (-not (Test-Path -LiteralPath $godot)) { throw "Godot 4.7.2 .NET editor executable was not found in the official archive." }
+          $installedTemplates = Join-Path $env:APPDATA "Godot\export_templates\4.7.2.stable"
+          New-Item -ItemType Directory -Force -Path $installedTemplates | Out-Null
+          $templateSource = Join-Path $templateDir "templates"
+          if (Test-Path -LiteralPath $templateSource) {
+            Copy-Item -Path (Join-Path $templateSource "*") -Destination $installedTemplates -Recurse -Force
+            $versionSource = Join-Path $templateDir "version.txt"
+            if (-not (Test-Path -LiteralPath $versionSource)) { $versionSource = Join-Path $templateSource "version.txt" }
+            if (Test-Path -LiteralPath $versionSource) { Copy-Item -LiteralPath $versionSource -Destination $installedTemplates -Force }
+          } else {
+            Copy-Item -Path (Join-Path $templateDir "*") -Destination $installedTemplates -Recurse -Force
+          }
+          $installedVersion = Join-Path $installedTemplates "version.txt"
+          if (-not (Test-Path -LiteralPath $installedVersion)) { throw "Godot export templates did not install a version.txt file." }
+          if ((Get-Content -Raw -LiteralPath $installedVersion).Trim() -ne "4.7.2.stable") { throw "Godot export templates do not match version 4.7.2.stable." }
+          Add-Content -Path $env:GITHUB_ENV -Value "GODOT_EXE=$godot"
+
+      - name: Import Godot resources
+        shell: pwsh
+        run: |
+          & $env:GODOT_EXE --headless --editor --path GodotProject --import --quit
+          if ($LASTEXITCODE -ne 0) { throw "Godot resource import failed with exit code $LASTEXITCODE." }
+
+      - name: Build Godot C# solution
+        run: dotnet build GodotProject/Richman.Godot.csproj --configuration Release
+
+      - name: Build Godot editor assemblies
+        shell: pwsh
+        run: |
+          & $env:GODOT_EXE --headless --editor --path GodotProject --build-solutions --quit
+          if ($LASTEXITCODE -ne 0) { throw "Godot C# solution build failed with exit code $LASTEXITCODE." }
+
+      - name: Export Windows x64 game
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "GodotProject/build/Richman-Windows-x64" | Out-Null
+          & $env:GODOT_EXE --headless --path GodotProject --export-release "Windows Desktop" "build/Richman-Windows-x64/Richman.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Godot Windows export failed with exit code $LASTEXITCODE." }
+          if (-not (Test-Path -LiteralPath "GodotProject/build/Richman-Windows-x64/Richman.exe")) { throw "Godot export did not produce Richman.exe." }
+
+      - name: Write playtest instructions and build info
+        shell: pwsh
+        run: |
+          $out = "GodotProject/build/Richman-Windows-x64"
+          @'
+          Richman Windows x64 Playtest
+
+          Run Richman.exe to start a four-player hot-seat game.
+          Use the on-screen Roll, Buy, Upgrade, Route, and End Turn controls.
+          Right-drag to orbit the board; use the mouse wheel to zoom.
+          When a route branch is reached, choose one of the route buttons in the HUD.
+
+          Requirements: Windows 10 or later, 64-bit. The official Godot .NET export includes the .NET runtime components needed to run this already-compiled game; no Godot Editor or .NET SDK is required.
+
+          Known limitation: automated headless startup does not replace a human GUI playtest. This artifact is a playtest build.
+          '@ | Set-Content -LiteralPath (Join-Path $out "PLAYTEST_README.txt") -Encoding utf8
+          $shortSha = (git rev-parse --short=12 HEAD).Trim()
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "master-$shortSha" }
+          $date = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+          @("Version: $version", "Git commit: $($env:GITHUB_SHA)", "Build date (UTC): $date", "Godot: 4.7.2 .NET", ".NET SDK: 10.0.x", "Target: Windows x86_64") | Set-Content -LiteralPath (Join-Path $out "BUILD_INFO.txt") -Encoding utf8
+
+      - name: Smoke test exported game and animate one pawn move
+        shell: pwsh
+        run: |
+          & "GodotProject/build/Richman-Windows-x64/Richman.exe" --headless -- --test-pawn-move
+          if ($LASTEXITCODE -ne 0) { throw "Exported game startup or pawn movement failed with exit code $LASTEXITCODE." }
+
+      - name: Package and verify playtest ZIP
+        shell: pwsh
+        run: |
+          $out = "GodotProject/build/Richman-Windows-x64"
+          $zip = "Richman-Windows-x64.zip"
+          Compress-Archive -Path (Join-Path $out "*") -DestinationPath $zip -Force
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $entries = @($archive.Entries | ForEach-Object FullName)
+            foreach ($required in @("Richman.exe", "PLAYTEST_README.txt", "BUILD_INFO.txt")) {
+              if ($entries -notcontains $required) { throw "Windows ZIP is missing $required." }
+            }
+          } finally { $archive.Dispose() }
+
+      - name: Upload master and tag playtest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Richman-Windows-x64
+          path: Richman-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish tagged GitHub Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: windows-playtest
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download verified Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Richman-Windows-x64
+
+      - name: Create GitHub Release with playtest ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" Richman-Windows-x64.zip --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"

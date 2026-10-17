@@ -54,17 +54,20 @@ namespace Richman.Simulation
         private static void RunCoreVerification()
         {
             var board = PrototypeBoardFactory.Create();
-            Require(board.MainRouteTileCount == 40 && board.TileCount == 47, "world map tile count");
+            Require(board.MainRouteTileCount == 41 && board.TileCount == 48, "world map tile count");
             Require(board.GetTileAt(30).Id == "london-prison", "London prison tile");
-            Require(board.GetTileAt(9).Type == BoardTileType.Hospital && board.GetTileAt(27).Type == BoardTileType.Court,
+            Require(board.GetTileAt(9).Type == BoardTileType.Hospital && board.GetTileAt(40).Type == BoardTileType.Court,
                 "hospital and court are real route tiles");
-            Require(board.GetTileAt(39).NextTileIds[0] == board.GetTileAt(0).Id, "main route closure");
+            Require(board.GetTileAt(40).NextTileIds[0] == board.GetTileAt(0).Id, "main route closure");
             Require(board.GetNextTiles(10).Count == 2, "Hong Kong route fork");
             Require(board.GetTile("airport-changi").AirportDestinationId == "airport-incheon", "Changi route");
             Require(board.GetTile("airport-incheon").AirportDestinationId == "airport-changi", "Incheon route");
             Require(board.GetTile("airport-dubai").AirportDestinationId == "airport-jfk", "Dubai route");
             Require(board.GetTile("airport-jfk").AirportDestinationId == "airport-dubai", "JFK route");
-            Console.WriteLine("CORE_ROUTE_OK main=40 all=47 branches=3 merges=validated");
+            Require(board.GetTile("paris-montmartre").Type == BoardTileType.Property && board.GetTile("paris-montmartre").PurchasePrice > 0,
+                "Paris Montmartre remains a purchasable property");
+            Require(board.GetTile("paris-court").Type == BoardTileType.Court, "court is a real route tile");
+            Console.WriteLine("CORE_ROUTE_OK main=41 all=48 branches=3 merges=validated paris_property=true court=true");
             Console.WriteLine("CORE_AIRPORTS_OK changi<->incheon dubai<->jfk");
 
             var airportSession = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
@@ -121,6 +124,57 @@ namespace Richman.Simulation
                 "three failed prison attempts charge one hundred bail");
             Console.WriteLine("CORE_PRISON_BAIL_OK failed_attempts=3 bail=100");
 
+            var poorPrisonTiles = new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Tile("prison", BoardTileType.Prison, 2), Tile("rest-3", BoardTileType.Rest, 3),
+                Tile("rest-4", BoardTileType.Rest, 4), Tile("rest-5", BoardTileType.Rest, 5),
+                Tile("rest-6", BoardTileType.Rest, 6), Tile("rest-7", BoardTileType.Rest, 7),
+                Tile("rest-8", BoardTileType.Rest, 8), Tile("rest-9", BoardTileType.Rest, 9)
+            };
+            var poorPrison = CreateSession(new GameModeConfig("poor-prison-test", 4, 4, 50, 0, 50, 25), poorPrisonTiles,
+                new ScriptedDiceRoller(
+                    new DiceResult(1, 1), new DiceResult(2, 2), new DiceResult(3, 3), new DiceResult(2, 3),
+                    new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1),
+                    new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 2)));
+            poorPrison.Execute(new RollDiceCommand(1)); poorPrison.Execute(new EndTurnCommand(1));
+            poorPrison.Execute(new RollDiceCommand(2)); poorPrison.Execute(new EndTurnCommand(2));
+            poorPrison.Execute(new RollDiceCommand(3)); poorPrison.Execute(new EndTurnCommand(3));
+            poorPrison.Execute(new RollDiceCommand(4)); poorPrison.Execute(new EndTurnCommand(4));
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                poorPrison.Execute(new RollDiceCommand(1));
+                if (attempt < 2)
+                {
+                    poorPrison.Execute(new EndTurnCommand(1));
+                    for (var playerId = 2; playerId <= 4; playerId++)
+                    {
+                        poorPrison.Execute(new RollDiceCommand(playerId));
+                        poorPrison.Execute(new EndTurnCommand(playerId));
+                    }
+                }
+            }
+            Require(poorPrison.State.GetPlayer(1).Status == PlayerStatus.Bankrupt && poorPrison.State.CurrentPlayerId == 2 &&
+                    poorPrison.State.Phase == TurnPhase.AwaitingRoll && poorPrison.State.Outcome == null,
+                "unpaid prison bail bankrupts player and automatically advances to active player");
+            Require(poorPrison.Execute(new EndTurnCommand(1)).ErrorCode == CommandErrorCode.PlayerEliminated,
+                "bankrupt jailed player is not asked to end turn");
+            Console.WriteLine("CORE_PRISON_BAIL_BANKRUPTCY_OK advances_to_active_player=true");
+
+            var finalBail = CreateSession(new GameModeConfig("final-prison-bail-test", 2, 2, 50, 0, 50, 25), poorPrisonTiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 2),
+                    new DiceResult(1, 1), new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 2)));
+            finalBail.Execute(new RollDiceCommand(1)); finalBail.Execute(new EndTurnCommand(1));
+            finalBail.Execute(new RollDiceCommand(2)); finalBail.Execute(new EndTurnCommand(2));
+            finalBail.Execute(new RollDiceCommand(1)); finalBail.Execute(new EndTurnCommand(1));
+            finalBail.Execute(new RollDiceCommand(2)); finalBail.Execute(new EndTurnCommand(2));
+            finalBail.Execute(new RollDiceCommand(1)); finalBail.Execute(new EndTurnCommand(1));
+            finalBail.Execute(new RollDiceCommand(2)); finalBail.Execute(new EndTurnCommand(2));
+            finalBail.Execute(new RollDiceCommand(1));
+            Require(finalBail.State.Phase == TurnPhase.Finished && finalBail.State.Outcome.WinnerId == 2,
+                "unpaid prison bail that ends game preserves finished phase and winner");
+            Console.WriteLine("CORE_PRISON_BAIL_GAME_FINISHED_OK phase=Finished winner=2");
+
             var hospitalSession = CreateSession(new GameModeConfig("hospital-test", 2, 2, 500, 0, 50, 25), new[]
             {
                 Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
@@ -142,7 +196,8 @@ namespace Richman.Simulation
                 Tile("court", BoardTileType.Court, 2), Tile("rest-2", BoardTileType.Rest, 3)
             }, new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(3, 4)));
             courtSession.Execute(new RollDiceCommand(1));
-            Require(courtSession.State.LastCourtDiceResult.Total == 7 && courtSession.State.LastEventMessage.Contains("acquittal"),
+            Require(courtSession.State.LastCourtDiceResult.Total == 7 && courtSession.State.LastEventMessage.Contains("acquittal") &&
+                    courtSession.State.LastEventMessage.Contains("3 + 4 = 7"),
                 "court acquits on seven");
             var courtFineSession = CreateSession(new GameModeConfig("court-fine-test", 2, 2, 500, 0, 50, 25), new[]
             {
@@ -152,7 +207,32 @@ namespace Richman.Simulation
             courtFineSession.Execute(new RollDiceCommand(1));
             Require(courtFineSession.State.GetPlayer(1).Money == 400 && courtFineSession.State.LastEventMessage.Contains("$100"),
                 "court low roll can choose one hundred fine");
-            Console.WriteLine("CORE_COURT_OK acquittal_threshold=7 low_roll_fine=100 extra_roll=true");
+            var courtPrisonSession = CreateSession(new GameModeConfig("court-prison-test", 2, 2, 500, 0, 50, 25), new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Tile("court", BoardTileType.Court, 2), Tile("rest-2", BoardTileType.Rest, 3)
+            }, new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1)), new ScriptedRandom(0, 0, 0, 0, 0, 0, 0));
+            courtPrisonSession.Execute(new RollDiceCommand(1));
+            Require(courtPrisonSession.State.GetPlayer(1).PrisonAttemptsRemaining == 3 &&
+                    courtPrisonSession.State.LastEventMessage.Contains("sent to prison"), "court low roll can sentence player to prison");
+            Console.WriteLine("CORE_COURT_OK acquittal_threshold=7 roll_shown=true prison=true low_roll_fine=100 extra_roll=true");
+
+            var cardSession = CreateSession(new GameModeConfig("card-effect-test", 2, 2, 1000, 0, 50, 25), new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Tile("chance", BoardTileType.Chance, 2), Tile("rest-3", BoardTileType.Rest, 3)
+            }, new ScriptedDiceRoller(new DiceResult(1, 1)), new ScriptedRandom(0));
+            cardSession.Execute(new RollDiceCommand(1));
+            var drawnChanceCard = cardSession.State.LastDrawnCard;
+            var expectedCardBalance = drawnChanceCard == null ? -1 : drawnChanceCard.Effect == MapCardEffect.ReceiveMoney
+                ? 1000 + drawnChanceCard.Amount : 1000 - drawnChanceCard.Amount;
+            var expectedCardResult = drawnChanceCard == null ? string.Empty :
+                (drawnChanceCard.Effect == MapCardEffect.ReceiveMoney ? "Received $" : "Paid $") + drawnChanceCard.Amount;
+            Require(drawnChanceCard != null && cardSession.State.GetPlayer(1).Money == expectedCardBalance &&
+                    cardSession.State.LastEventMessage.Contains(drawnChanceCard.Title) &&
+                    cardSession.State.LastEventMessage.Contains(drawnChanceCard.Description) &&
+                    cardSession.State.LastEventMessage.Contains(expectedCardResult), "chance card displays its content and applied result");
+            Console.WriteLine("CORE_CARD_OK title_content_and_effect_result_displayed=true");
 
             var upgradeBoard = new BoardDefinition(new[]
             {
@@ -170,7 +250,32 @@ namespace Richman.Simulation
             Require(upgradeSession.Execute(new UpgradePropertyCommand(1, "property-1")).Succeeded &&
                     upgradeSession.State.GetProperty("property-1").UpgradeLevel == 1,
                 "upgrade command targets an owned property by id");
-            Console.WriteLine("CORE_START_UPGRADE_OK target_id_validated=true");
+            var otherOwnedUpgrade = CreateStartUpgradeSession(500, false);
+            Require(otherOwnedUpgrade.State.CanUpgradeOwnedProperty && otherOwnedUpgrade.State.GetProperty("owned").OwnerId == 2 &&
+                    otherOwnedUpgrade.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode == CommandErrorCode.PropertyUnavailable,
+                "start upgrade rejects a property owned by another player");
+            var poorUpgrade = CreateStartUpgradeSession(120, true);
+            Require(poorUpgrade.State.GetPlayer(1).Money == 20 &&
+                    poorUpgrade.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode == CommandErrorCode.InsufficientFunds &&
+                    poorUpgrade.State.GetProperty("owned").UpgradeLevel == 0,
+                "start upgrade rejects insufficient funds");
+            var maximumUpgrade = CreateSession(new GameModeConfig("upgrade-cap-test", 2, 2, 500, 0, 50, 25), new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                new BoardTileDefinition("owned", BoardTileType.Property, "owned", 2, 100, 20, 50, new[] { 20, 40, 60 }, "test", "owned"),
+                Tile("rest-3", BoardTileType.Rest, 3)
+            }, new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1),
+                new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)));
+            maximumUpgrade.Execute(new RollDiceCommand(1)); maximumUpgrade.Execute(new BuyPropertyCommand(1)); maximumUpgrade.Execute(new EndTurnCommand(1));
+            maximumUpgrade.Execute(new RollDiceCommand(2)); maximumUpgrade.Execute(new EndTurnCommand(2));
+            maximumUpgrade.Execute(new RollDiceCommand(1)); Require(maximumUpgrade.Execute(new UpgradePropertyCommand(1, "owned")).Succeeded, "first start upgrade"); maximumUpgrade.Execute(new EndTurnCommand(1));
+            maximumUpgrade.Execute(new RollDiceCommand(2)); maximumUpgrade.Execute(new EndTurnCommand(2));
+            maximumUpgrade.Execute(new RollDiceCommand(1)); Require(maximumUpgrade.Execute(new UpgradePropertyCommand(1, "owned")).Succeeded, "property upgrade to max level"); maximumUpgrade.Execute(new EndTurnCommand(1));
+            maximumUpgrade.Execute(new RollDiceCommand(2)); maximumUpgrade.Execute(new EndTurnCommand(2)); maximumUpgrade.Execute(new RollDiceCommand(1));
+            Require(maximumUpgrade.State.CanUpgradeOwnedProperty && maximumUpgrade.State.GetProperty("owned").UpgradeLevel == 2 &&
+                    maximumUpgrade.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode == CommandErrorCode.PropertyAlreadyMaxLevel,
+                "start upgrade rejects a property at its maximum level");
+            Console.WriteLine("CORE_START_UPGRADE_OK target_id_validated=true owner_funds_limit_checked=true");
 
             var branchSession = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
                 new ScriptedDiceRoller(new DiceResult(4, 4), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(3, 3)));
@@ -180,7 +285,8 @@ namespace Richman.Simulation
             Require(fork.PathTileIndices.Count == 2 && branchSession.State.PendingAction == PendingAction.ChooseRoute, "route-choice pause");
             Require(branchSession.Execute(new ChooseRouteCommand(1, "not-a-route")).ErrorCode == CommandErrorCode.InvalidRouteChoice, "reject invalid route");
             var branch = branchSession.Execute(new ChooseRouteCommand(1, "macau-ferry-pier"));
-            Require(branch.Succeeded && branch.PathTileIndices.Count == 4 && branchSession.State.GetPlayer(1).CurrentTileIndex == 12, "branch movement and merge");
+            Require(branch.Succeeded && branch.PathTileIndices.Count == 4 && branchSession.State.GetPlayer(1).CurrentTileIndex == 12 &&
+                    string.IsNullOrEmpty(branchSession.State.LastEventMessage), "branch movement and merge clears stale route prompt");
             Console.WriteLine("CORE_BRANCH_OK fork=hong-kong path=macau->merge remaining-steps=consumed");
 
             var district = CreateSession(new GameModeConfig("district-test", 2, 2, 1000, 0, 50, 25), new[]
@@ -230,6 +336,24 @@ namespace Richman.Simulation
         private static BoardTileDefinition Property(string id, string district, int index, int price, int rent)
         {
             return new BoardTileDefinition(id, BoardTileType.Property, id, index, price, rent, 50, new[] { rent, rent * 2 }, district, id);
+        }
+
+        private static GameSession CreateStartUpgradeSession(int startingMoney, bool playerOneOwns)
+        {
+            var session = CreateSession(new GameModeConfig("start-upgrade-validation", 2, 2, startingMoney, 0, 50, 25), new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Property("owned", "test", 2, 100, 20), Tile("rest-3", BoardTileType.Rest, 3)
+            }, new ScriptedDiceRoller(new DiceResult(1, 1), playerOneOwns ? new DiceResult(1, 2) : new DiceResult(1, 1), new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1));
+            if (playerOneOwns) session.Execute(new BuyPropertyCommand(1));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            if (!playerOneOwns) session.Execute(new BuyPropertyCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            return session;
         }
 
         private static BoardTileDefinition Airport(string id, int positionIndex, string destinationId)

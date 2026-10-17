@@ -112,6 +112,27 @@
     white-space: normal;
 }
 
+.route-choices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.route-choice-prompt {
+    width: 100%;
+    color: rgb(255, 211, 92);
+    -unity-font-style: bold;
+}
+
+.route-choice-button {
+    min-height: 34px;
+    flex-grow: 1;
+    margin: 3px;
+    background-color: rgb(35, 91, 162);
+    color: white;
+}
+
 .button-row {
     flex-direction: row;
     height: 43px;

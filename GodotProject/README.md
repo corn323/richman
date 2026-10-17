@@ -21,4 +21,12 @@
 - 格子、Y-up 座標、閉環與支線：`Data/archipelago_tiles.json`。
 - Godot 由 `GodotBoardView` 呼叫 `GltfDocument` 載入 GLB，格子中心由 JSON 的 `x/y/z` 讀取；位置不依賴 mesh 順序。
 - 開啟此資料夾的 `project.godot`，使用 Godot 4.7 .NET 版。可沿用 `Richman.Godot.csproj` 建置。
-- 在第 17 格可按 `B`，棋子會走過瞭望支線並接回第 18 格；主要路線維持原有 Board 索引閉環。
+- 棋盤主路線為 41 格閉環、總計 48 格，含三條可返回主路線的支線。路線分支會在 HUD 顯示選項，Core 的實際移動路徑驅動棋子動畫。
+- 巴黎蒙馬特維持可購買地產；巴黎國際法院是新增的獨立主路線地格。格子資料由 Core 匯出，Blender 生成器與 Godot 都讀同一份資料。
+
+## Windows Playtest 匯出
+
+- `export_presets.cfg` 提供 `Windows Desktop` x86_64 預設，CLI 匯出命令為 `godot --headless --path GodotProject --export-release "Windows Desktop" build/Richman-Windows-x64/Richman.exe`。
+- `.github/workflows/ci-release.yml` 在 master PR 執行測試與建置，在 master push 和 `v*` tag push 時額外匯出 Windows ZIP 並執行 headless 啟動冒煙測試。
+- master push 的 ZIP 可從 GitHub Actions artifact 下載；推送 `v*` tag 會在工作流程成功後建立附 ZIP 和自動 Release Notes 的 GitHub Release。
+- 匯出的 Windows 遊戲包含官方 Godot .NET runtime 元件，玩家不需要 Godot Editor、.NET SDK 或另外安裝 .NET Runtime。

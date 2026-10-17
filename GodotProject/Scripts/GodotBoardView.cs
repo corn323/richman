@@ -142,7 +142,7 @@ namespace Richman.GodotPresentation
 
         private void ValidateRoute()
         {
-            if (_board.MainRouteTileCount != 40 || _board.TileCount != 47) throw new InvalidDataException("World tour Core data should define 40 main route tiles and 47 total tiles.");
+            if (_board.MainRouteTileCount != 41 || _board.TileCount != 48) throw new InvalidDataException("World tour Core data should define 41 main route tiles and 48 total tiles.");
             for (var i = 0; i < _board.MainRouteTileCount; i++)
             {
                 var expected = _board.GetTileAt((i + 1) % _board.MainRouteTileCount).Id;

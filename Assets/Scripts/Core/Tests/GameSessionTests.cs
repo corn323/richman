@@ -14,10 +14,10 @@ namespace Richman.Core.Tests
 
             Assert.That(session.State.Players.Count, Is.EqualTo(session.Mode.MaxPlayers));
             Assert.That(session.State.Players, Has.All.Property("Status").EqualTo(PlayerStatus.Active));
-            Assert.That(session.Board.MainRouteTileCount, Is.EqualTo(40));
-            Assert.That(session.Board.TileCount, Is.EqualTo(47));
+            Assert.That(session.Board.MainRouteTileCount, Is.EqualTo(41));
+            Assert.That(session.Board.TileCount, Is.EqualTo(48));
             Assert.That(session.Board.GetTileAt(1).Type, Is.EqualTo(BoardTileType.Property));
-            Assert.That(session.Board.GetTileAt(1).PurchasePrice, Is.EqualTo(120));
+            Assert.That(session.Board.GetTileAt(1).PurchasePrice, Is.EqualTo(140));
         }
 
         [Test]
@@ -25,13 +25,16 @@ namespace Richman.Core.Tests
         {
             var board = PrototypeBoardFactory.Create();
 
-            Assert.That(board.MainRouteTileCount, Is.EqualTo(40));
-            Assert.That(board.TileCount, Is.EqualTo(47));
+            Assert.That(board.MainRouteTileCount, Is.EqualTo(41));
+            Assert.That(board.TileCount, Is.EqualTo(48));
             Assert.That(board.GetTileAt(0).Id, Is.EqualTo("start-singapore"));
             Assert.That(board.GetTileAt(3).Type, Is.EqualTo(BoardTileType.Airport));
             Assert.That(board.GetTileAt(30).Id, Is.EqualTo("london-prison"));
             Assert.That(board.GetTileAt(30).Type, Is.EqualTo(BoardTileType.Prison));
-            Assert.That(board.GetTileAt(39).NextTileIds[0], Is.EqualTo("start-singapore"));
+            Assert.That(board.GetTileAt(27).Type, Is.EqualTo(BoardTileType.Property));
+            Assert.That(board.GetTileAt(27).Id, Is.EqualTo("paris-montmartre"));
+            Assert.That(board.GetTileAt(40).Type, Is.EqualTo(BoardTileType.Court));
+            Assert.That(board.GetTileAt(40).NextTileIds[0], Is.EqualTo("start-singapore"));
             Assert.That(board.GetTile("macau-heritage-quarter").RejoinsAtId, Is.EqualTo("hong-kong-victoria-peak"));
             Assert.That(board.GetNextTiles(10).Count, Is.EqualTo(2));
         }
@@ -62,10 +65,11 @@ namespace Richman.Core.Tests
             var branch = session.Execute(new ChooseRouteCommand(1, "macau-ferry-pier"));
 
             Assert.That(branch.Succeeded, Is.True);
-            Assert.That(branch.PathTileIndices, Is.EqualTo(new[] { 40, 41, 11, 12 }));
+            Assert.That(branch.PathTileIndices, Is.EqualTo(new[] { 41, 42, 11, 12 }));
             Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(12));
             Assert.That(session.State.PendingAction, Is.EqualTo(PendingAction.None));
             Assert.That(session.State.MovementStepsRemaining, Is.Zero);
+            Assert.That(session.State.LastEventMessage, Is.Empty);
         }
 
         [Test]
@@ -105,7 +109,7 @@ namespace Richman.Core.Tests
         {
             var session = CreateSession(
                 new GameModeConfig("test", 2, 2, 500, 0, 50, 25),
-                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Tile("airport-1", BoardTileType.Airport, 2), Tile("rest-2", BoardTileType.Rest, 3), Tile("airport-2", BoardTileType.Airport, 4) },
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Airport("airport-1", 2, "airport-2"), Tile("rest-2", BoardTileType.Rest, 3), Airport("airport-2", 4, "airport-1") },
                 new ScriptedDiceRoller(new DiceResult(1, 1)));
 
             var roll = session.Execute(new RollDiceCommand(1));
@@ -113,7 +117,7 @@ namespace Richman.Core.Tests
             Assert.That(roll.Succeeded, Is.True);
             Assert.That(roll.ToTileIndex, Is.EqualTo(4));
             Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(4));
-            Assert.That(session.State.LastEventMessage, Does.Contain("flew"));
+            Assert.That(session.State.LastEventMessage, Does.Contain("機場航線"));
         }
 
         [TestCase("airport-changi", "airport-incheon")]
@@ -192,6 +196,180 @@ namespace Richman.Core.Tests
         }
 
         [Test]
+        public void ThirdPrisonFailureWithInsufficientBailAutomaticallyAdvancesTurn()
+        {
+            var mode = new GameModeConfig("poor-prison-test", 4, 4, 50, 0, 50, 25);
+            var board = PrisonRoute();
+            var dice = new ScriptedDiceRoller(
+                new DiceResult(1, 1), new DiceResult(2, 2), new DiceResult(3, 3), new DiceResult(2, 3),
+                new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1),
+                new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 2));
+            var session = CreateSession(mode, board.Tiles, dice);
+
+            session.Execute(new RollDiceCommand(1)); session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(3)); session.Execute(new EndTurnCommand(3));
+            session.Execute(new RollDiceCommand(4)); session.Execute(new EndTurnCommand(4));
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var bail = session.Execute(new RollDiceCommand(1));
+                Assert.That(bail.Succeeded, Is.True);
+                if (attempt < 2) session.Execute(new EndTurnCommand(1));
+                if (attempt < 2)
+                {
+                    for (var other = 2; other <= 4; other++)
+                    {
+                        session.Execute(new RollDiceCommand(other));
+                        session.Execute(new EndTurnCommand(other));
+                    }
+                }
+            }
+
+            Assert.That(session.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Bankrupt));
+            Assert.That(session.State.GetPlayer(1).Money, Is.Zero);
+            Assert.That(session.State.CurrentPlayerId, Is.EqualTo(2));
+            Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingRoll));
+            Assert.That(session.State.Outcome, Is.Null);
+            Assert.That(session.State.LastEventMessage, Does.Contain("unable to pay $100"));
+            Assert.That(session.Execute(new EndTurnCommand(1)).ErrorCode, Is.EqualTo(CommandErrorCode.PlayerEliminated));
+        }
+
+        [Test]
+        public void ThirdPrisonFailureThatEndsGameLeavesPhaseFinished()
+        {
+            var mode = new GameModeConfig("last-player-bail-test", 2, 2, 50, 0, 50, 25);
+            var dice = new ScriptedDiceRoller(
+                new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 2),
+                new DiceResult(1, 1), new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 2));
+            var session = CreateSession(mode, PrisonRoute().Tiles, dice);
+
+            session.Execute(new RollDiceCommand(1)); session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1)); session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1)); session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            var lastAttempt = session.Execute(new RollDiceCommand(1));
+
+            Assert.That(lastAttempt.Succeeded, Is.True);
+            Assert.That(session.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Bankrupt));
+            Assert.That(session.State.GetPlayer(2).Status, Is.EqualTo(PlayerStatus.Winner));
+            Assert.That(session.State.Outcome.WinnerId, Is.EqualTo(2));
+            Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.Finished));
+            Assert.That(session.Execute(new EndTurnCommand(1)).ErrorCode, Is.EqualTo(CommandErrorCode.GameFinished));
+        }
+
+        [Test]
+        public void StartUpgradePermissionAppearsForStopButNotForPassingStart()
+        {
+            var property = Property("owned", 100, 20, 50, 2, 20, 40);
+            var stopSession = CreateSession(new GameModeConfig("start-upgrade", 2, 2, 500, 100, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1), property, Tile("rest-3", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)));
+            stopSession.Execute(new RollDiceCommand(1)); stopSession.Execute(new BuyPropertyCommand(1)); stopSession.Execute(new EndTurnCommand(1));
+            stopSession.Execute(new RollDiceCommand(2)); stopSession.Execute(new EndTurnCommand(2));
+            stopSession.Execute(new RollDiceCommand(1));
+            Assert.That(stopSession.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(0));
+            Assert.That(stopSession.State.CanUpgradeOwnedProperty, Is.True);
+            Assert.That(stopSession.State.Phase, Is.EqualTo(TurnPhase.AwaitingEndTurn));
+            Assert.That(stopSession.Execute(new UpgradePropertyCommand(1, "owned")).Succeeded, Is.True);
+
+            var passSession = CreateSession(new GameModeConfig("start-pass", 2, 2, 500, 100, 50, 25),
+                new[] { Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1), Tile("rest-2", BoardTileType.Rest, 2), Tile("rest-3", BoardTileType.Rest, 3) },
+                new ScriptedDiceRoller(new DiceResult(1, 2), new DiceResult(1, 1), new DiceResult(1, 1)));
+            passSession.Execute(new RollDiceCommand(1)); passSession.Execute(new EndTurnCommand(1));
+            passSession.Execute(new RollDiceCommand(2)); passSession.Execute(new EndTurnCommand(2));
+            passSession.Execute(new RollDiceCommand(1));
+            Assert.That(passSession.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(1));
+            Assert.That(passSession.State.CanUpgradeOwnedProperty, Is.False);
+        }
+
+        [Test]
+        public void StartUpgradeRejectsAPropertyOwnedByAnotherPlayer()
+        {
+            var session = CreateStartUpgradeSession(500, false);
+
+            Assert.That(session.State.CanUpgradeOwnedProperty, Is.True);
+            Assert.That(session.State.GetProperty("owned").OwnerId, Is.EqualTo(2));
+            Assert.That(session.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode,
+                Is.EqualTo(CommandErrorCode.PropertyUnavailable));
+        }
+
+        [Test]
+        public void StartUpgradeRejectsInsufficientFunds()
+        {
+            var session = CreateStartUpgradeSession(120, true);
+
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(20));
+            Assert.That(session.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode,
+                Is.EqualTo(CommandErrorCode.InsufficientFunds));
+            Assert.That(session.State.GetProperty("owned").UpgradeLevel, Is.Zero);
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(20));
+        }
+
+        [Test]
+        public void StartUpgradeRejectsAPropertyAtItsMaximumLevel()
+        {
+            var session = CreateSession(new GameModeConfig("start-upgrade-limit", 2, 2, 500, 0, 50, 25),
+                new[]
+                {
+                    Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1),
+                    Property("owned", 100, 20, 50, 2, 20, 40, 60), Tile("rest-3", BoardTileType.Rest, 3)
+                },
+                new ScriptedDiceRoller(
+                    new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1),
+                    new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1)); session.Execute(new BuyPropertyCommand(1)); session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            Assert.That(session.Execute(new UpgradePropertyCommand(1, "owned")).Succeeded, Is.True);
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            Assert.That(session.Execute(new UpgradePropertyCommand(1, "owned")).Succeeded, Is.True);
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2)); session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+
+            Assert.That(session.State.CanUpgradeOwnedProperty, Is.True);
+            Assert.That(session.State.GetProperty("owned").UpgradeLevel, Is.EqualTo(2));
+            Assert.That(session.Execute(new UpgradePropertyCommand(1, "owned")).ErrorCode,
+                Is.EqualTo(CommandErrorCode.PropertyAlreadyMaxLevel));
+        }
+
+        private static GameSession CreateStartUpgradeSession(int startingMoney, bool playerOneOwns)
+        {
+            var session = CreateSession(new GameModeConfig("start-upgrade-validation", 2, 2, startingMoney, 0, 50, 25),
+                new[]
+                {
+                    Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1),
+                    Property("owned", 100, 20, 50, 2, 20, 40), Tile("rest-3", BoardTileType.Rest, 3)
+                },
+                new ScriptedDiceRoller(new DiceResult(1, 1), playerOneOwns ? new DiceResult(1, 2) : new DiceResult(1, 1), new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1));
+            if (playerOneOwns) session.Execute(new BuyPropertyCommand(1));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            if (!playerOneOwns) session.Execute(new BuyPropertyCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            return session;
+        }
+
+        private static BoardDefinition PrisonRoute()
+        {
+            var tiles = new List<BoardTileDefinition>
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Effect("prison", BoardTileType.Prison, 2, 1)
+            };
+            for (var i = 3; i < 10; i++) tiles.Add(Tile("rest-" + i, BoardTileType.Rest, i));
+            return new BoardDefinition(tiles);
+        }
+
+        [Test]
         public void CourtRollsForAcquittalAndAppliesOneRandomJudgment()
         {
             var court = CreateSession(
@@ -202,6 +380,7 @@ namespace Richman.Core.Tests
             Assert.That(court.State.LastCourtDiceResult.Total, Is.EqualTo(7));
             Assert.That(court.State.GetPlayer(1).Money, Is.EqualTo(500));
             Assert.That(court.State.LastEventMessage, Does.Contain("acquittal"));
+            Assert.That(court.State.LastEventMessage, Does.Contain("3 + 4 = 7"));
         }
 
         [TestCase(0, true)]
@@ -235,10 +414,86 @@ namespace Richman.Core.Tests
 
             Assert.That(session.State.LastDrawnCard, Is.Not.Null);
             Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Title));
+            Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Description));
+            Assert.That(session.State.LastEventMessage, Does.Contain("Result:"));
             if (session.State.LastDrawnCard.Effect == MapCardEffect.ReceiveMoney)
                 Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(500 + session.State.LastDrawnCard.Amount));
             else if (session.State.LastDrawnCard.Effect == MapCardEffect.PayBank)
                 Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(500 - session.State.LastDrawnCard.Amount));
+        }
+
+        [Test]
+        public void ChanceAndDestinyUseIndependentShuffledPiles()
+        {
+            var board = new BoardDefinition(new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Tile("chance", BoardTileType.Chance, 2), Tile("rest-3", BoardTileType.Rest, 3),
+                Tile("destiny", BoardTileType.Destiny, 4), Tile("rest-5", BoardTileType.Rest, 5)
+            });
+            var session = CreateSession(new GameModeConfig("separate-decks", 2, 2, 1000, 0, 50, 25), board.Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)), new ScriptedRandom(0));
+
+            session.Execute(new RollDiceCommand(1));
+            var chanceCard = session.State.LastDrawnCard;
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            var destinyCard = session.State.LastDrawnCard;
+
+            Assert.That(chanceCard.DeckId, Is.EqualTo("chance"));
+            Assert.That(destinyCard.DeckId, Is.EqualTo("destiny"));
+            Assert.That(chanceCard.Id, Does.StartWith("chance-"));
+            Assert.That(destinyCard.Id, Does.StartWith("destiny-"));
+        }
+
+        [Test]
+        public void ChanceDiscardPileIsReusedOnlyAfterEveryCardWasDrawn()
+        {
+            var board = new BoardDefinition(new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Tile("chance", BoardTileType.Chance, 2), Tile("rest-3", BoardTileType.Rest, 3)
+            });
+            var dice = new ScriptedDiceRoller(
+                new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(2, 2), new DiceResult(2, 2),
+                new DiceResult(2, 2), new DiceResult(2, 2), new DiceResult(2, 2), new DiceResult(2, 2),
+                new DiceResult(2, 2));
+            var session = CreateSession(new GameModeConfig("chance-cycle", 2, 2, 1000, 0, 50, 25), board.Tiles, dice, new ScriptedRandom(0));
+            var drawn = new HashSet<string>();
+            for (var roll = 0; roll < 9; roll++)
+            {
+                var playerId = roll % 2 + 1;
+                session.Execute(new RollDiceCommand(playerId));
+                if (session.State.LastDrawnCard != null) drawn.Add(session.State.LastDrawnCard.Id);
+                if (roll < 8) session.Execute(new EndTurnCommand(playerId));
+            }
+
+            Assert.That(drawn.Count, Is.EqualTo(4));
+            Assert.That(session.State.LastDrawnCard, Is.Not.Null);
+            Assert.That(session.State.LastDrawnCard.DeckId, Is.EqualTo("chance"));
+        }
+
+        [Test]
+        public void CourtFineShortfallBankruptsPlayerAndFinishesTheGame()
+        {
+            var board = new BoardDefinition(new[]
+            {
+                Tile("start", BoardTileType.Start, 0), Tile("rest-1", BoardTileType.Rest, 1),
+                Effect("court", BoardTileType.Court, 2, 100), Tile("rest-3", BoardTileType.Rest, 3)
+            });
+            var session = CreateSession(new GameModeConfig("court-bankruptcy", 2, 2, 50, 0, 50, 25), board.Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1)),
+                new ScriptedRandom(0, 0, 0, 0, 0, 0, 1));
+
+            var result = session.Execute(new RollDiceCommand(1));
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(session.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Bankrupt));
+            Assert.That(session.State.GetPlayer(2).Status, Is.EqualTo(PlayerStatus.Winner));
+            Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.Finished));
+            Assert.That(session.State.LastEventMessage, Does.Contain("paid $100"));
         }
 
         [Test]
@@ -285,7 +540,7 @@ namespace Richman.Core.Tests
 
             Assert.That(result.Succeeded, Is.True);
             Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(1));
-            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(600));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(800));
         }
 
         [Test]

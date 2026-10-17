@@ -69,7 +69,8 @@ namespace Richman.GodotPresentation
             _roll.Disabled = !(canAct && state.Phase == TurnPhase.AwaitingRoll);
             _buy.Disabled = !(canAct && state.PendingAction == PendingAction.BuyProperty);
             foreach (var child in _upgradeOptions.GetChildren()) { _upgradeOptions.RemoveChild(child); child.QueueFree(); }
-            if (state.Phase == TurnPhase.AwaitingAction && (state.PendingAction == PendingAction.UpgradeProperty || state.CanUpgradeOwnedProperty))
+            if ((state.Phase == TurnPhase.AwaitingAction && state.PendingAction == PendingAction.UpgradeProperty) ||
+                (state.CanUpgradeOwnedProperty && state.Phase == TurnPhase.AwaitingEndTurn))
             {
                 _upgradeOptions.AddChild(new Label { Text = state.CanUpgradeOwnedProperty ? "起點升級：選擇自有地產" : "升級目前地產" });
                 for (var i = 0; i < state.Properties.Count; i++)

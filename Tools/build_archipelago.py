@@ -45,7 +45,7 @@ def collection(name):
         if existing.name == name or existing.name.startswith(name + '.'):
             return existing
     c=bpy.data.collections.new(name); scene.collection.children.link(c); return c
-terrain=collection('Terrain'); water=collection('River and Sea'); route=collection('MainRoute - 36 stable tile sockets'); landmarks=collection('Landmarks'); buildings=collection('Buildings'); deco=collection('Decorations'); decks=collection('ChanceDecks')
+terrain=collection('Terrain'); water=collection('River and Sea'); route=collection('MainRoute - data-driven stable tile sockets'); landmarks=collection('Landmarks'); buildings=collection('Buildings'); deco=collection('Decorations'); decks=collection('ChanceDecks')
 MAP_COLLECTIONS={terrain,water,route,landmarks,buildings,deco,decks}
 def mat(name, color, rough=0.78, metal=0):
     m=bpy.data.materials.get(name) or bpy.data.materials.new(name); m.diffuse_color=(*color,1); m.use_nodes=True
@@ -103,9 +103,6 @@ def tube(name, points, radius, material, col, cyclic=False):
 n=CORE_MAIN_COUNT
 coords=[(t['position']['x'], t['position']['z']) for t in CORE_TILES[:n]]
 heights=[t['position']['y'] for t in CORE_TILES[:n]]
-names=['Central Station','Tokyo','Community Garden','Canal Row','Rooftop Park','Sky Tram','Copper Workshop','City Maintenance','Sunset Apartments','Old Clock Tower','Pixel Arcade','Street Fair','Skyline Lab','Quiet Courtyard','Harbor Exchange','Ferry Terminal','Bamboo Court','Transit Fund','Mosaic Plaza','Observation Deck','Rainy Day Theater','Public Art Fund','Foundry Lane','Rooftop Garden','Solaris Heights','Monorail Loop','Tideglass Pier','Infrastructure Works','Northlight Studios','Quiet Alley','Crescent Bazaar','Festival Grant','Neon Garden','Riverside Rest','Aster Foundry','Summit Forum']
-types=['start']+['property' if i not in (2,4,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33) else ({2:'chance',4:'destiny',5:'airport',7:'tax',9:'landmark',11:'chance',13:'hospital',15:'transit',17:'destiny',19:'landmark',21:'chance',23:'prison',25:'airport',27:'court',29:'destiny',31:'chance',33:'special'}[i]) for i in range(1,n)]
-special_names={0:'START · Central Station',2:'Chance · Festival',4:'Destiny · Sky Tram',5:'Airport · Air Route',7:'City Maintenance',9:'Old Clock Tower',11:'Chance · Street Fair',13:'Hospital',15:'Ferry Terminal',17:'Destiny · Transit',19:'Observation Deck',21:'Chance · Public Art',23:'Prison',25:'Airport · Island Hopper',27:'Court',29:'Destiny · Royal Decree',31:'Chance · Crescent Bazaar',33:'Riverside Rest'}
 tiles=[]
 for i,tile in enumerate(CORE_TILES):
     x=tile['position']['x']; z=tile['position']['z']; y=tile['position']['y']+.16

@@ -32,6 +32,36 @@ namespace Richman.GodotPresentation
             _board.ApplyState(_session.State);
             _board.SyncPawns(_session.State);
             _hud.Render(_session.State, "Player 1, roll the dice.", false);
+            if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--test-pawn-move") >= 0)
+                _ = RunPawnMoveSmoke();
+        }
+
+        private async System.Threading.Tasks.Task RunPawnMoveSmoke()
+        {
+            try
+            {
+                var player = _session.State.GetPlayer(1);
+                var result = _session.Execute(new RollDiceCommand(player.Id));
+                if (!result.Succeeded || result.DiceResult == null || result.PathTileIndices.Count == 0)
+                    throw new System.InvalidOperationException("Core did not produce a pawn movement path.");
+
+                await _board.AnimatePawn(player.Id, result.PathTileIndices);
+                if (result.PathTileIndices[result.PathTileIndices.Count - 1] != player.CurrentTileIndex)
+                    await _board.AnimateTransfer(player.Id, player.CurrentTileIndex);
+
+                var expected = _board.GetTilePosition(player.CurrentTileIndex) + new Vector3(-0.11f, 0.18f, -0.11f);
+                if (_board.GetPawn(player.Id).Position.DistanceTo(expected) > 0.001f)
+                    throw new System.InvalidOperationException("Animated pawn did not finish at the Core tile centre.");
+
+                GD.Print("GODOT_PAWN_MOVE_OK from=start to=", _session.Board.GetTileAt(player.CurrentTileIndex).Id,
+                    " steps=", result.PathTileIndices.Count, " trigger=", _session.State.LastEventMessage);
+                GetTree().Quit();
+            }
+            catch (System.Exception exception)
+            {
+                GD.PushError("GODOT_PAWN_MOVE_FAILED " + exception);
+                GetTree().Quit(1);
+            }
         }
 
         private void BuildPresentationBootstrap()

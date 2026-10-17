@@ -12,6 +12,7 @@
             <ui:Label name="PlayerList" text="P1  $1500  Tile 0&#10;P2  $1500  Tile 0&#10;P3  $1500  Tile 0&#10;P4  $1500  Tile 0" class="player-list" />
             <ui:Label name="OwnedProperties" text="OWNED PROPERTIES&#10;None yet" class="owned-properties" />
             <ui:Label name="CurrentTile" text="CURRENT TILE&#10;Central Station" class="current-tile" />
+            <ui:VisualElement name="RouteChoices" class="route-choices" />
             <ui:VisualElement class="button-row row-one">
                 <ui:Button name="RollButton" text="ROLL DICE" class="action-button" />
                 <ui:Button name="BuyButton" text="BUY" class="action-button" />

@@ -31,8 +31,10 @@ namespace Richman.Presentation
         private Label _propertyUpgradeCost;
         private Label _propertyHeader;
         private DropdownField _upgradeChoice;
+        private VisualElement _routeChoices;
         private readonly List<string> _upgradeIds = new List<string>();
         private Action<string> _upgradeAction;
+        private Action<string> _routeAction;
         private Button _rollButton;
         private Button _buyButton;
         private Button _upgradeButton;
@@ -53,10 +55,12 @@ namespace Richman.Presentation
             _initialized = false;
         }
 
-        public void BindActions(Action roll, Action buy, Action<string> upgrade, Action endTurn, Action newGame, Action<RichmanLanguage> languageChanged)
+        public void BindActions(Action roll, Action buy, Action<string> upgrade, Action<string> route,
+            Action endTurn, Action newGame, Action<RichmanLanguage> languageChanged)
         {
             if (!EnsureReferences()) return;
             _upgradeAction = upgrade;
+            _routeAction = route;
             _rollButton.clicked -= roll;
             _rollButton.clicked += roll;
             _buyButton.clicked -= buy;
@@ -106,10 +110,38 @@ namespace Richman.Presentation
             RenderPlayers(state);
             RenderOwnedProperties(state, current.Id);
             RenderUpgradeChoices(state, current.Id);
+            RenderRouteChoices(state, busy);
             var tile = state.Board.GetTileAt(current.CurrentTileIndex);
             _currentTile.text = RichmanLocalization.Format("current-tile", RichmanLocalization.TileName(tile), RichmanLocalization.TileType(tile.Type));
             RenderPropertyPanel(state, tile);
             RenderButtons(state, busy);
+        }
+
+        private void RenderRouteChoices(GameState state, bool busy)
+        {
+            if (_routeChoices == null) return;
+            _routeChoices.Clear();
+            var showChoices = !busy && state.Outcome == null && state.PendingAction == PendingAction.ChooseRoute;
+            _routeChoices.style.display = showChoices ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!showChoices) return;
+
+            var prompt = new Label(RichmanLocalization.Text("choose-route")) { name = "RouteChoicePrompt" };
+            prompt.AddToClassList("route-choice-prompt");
+            _routeChoices.Add(prompt);
+            for (var i = 0; i < state.RouteChoiceTileIds.Count; i++)
+            {
+                var tile = state.Board.GetTile(state.RouteChoiceTileIds[i]);
+                if (tile == null) continue;
+                var tileId = tile.Id;
+                var button = new Button(() => _routeAction?.Invoke(tileId))
+                {
+                    name = "RouteChoice_" + tileId,
+                    text = RichmanLocalization.TileName(tile)
+                };
+                button.AddToClassList("route-choice-button");
+                button.SetEnabled(_routeAction != null);
+                _routeChoices.Add(button);
+            }
         }
 
         private void RenderUpgradeChoices(GameState state, int playerId)
@@ -162,6 +194,7 @@ namespace Richman.Presentation
             _buyButton = root.Q<Button>("BuyButton");
             _upgradeButton = root.Q<Button>("UpgradeButton");
             _upgradeChoice = root.Q<DropdownField>("UpgradePropertyChoice");
+            _routeChoices = root.Q<VisualElement>("RouteChoices");
             if (_upgradeChoice == null && _upgradeButton != null)
             {
                 _upgradeChoice = new DropdownField("地產") { name = "UpgradePropertyChoice" };
@@ -246,9 +279,10 @@ namespace Richman.Presentation
             _rollButton.SetEnabled(canAct && state.Phase == TurnPhase.AwaitingRoll);
             _buyButton.SetEnabled(canAct && state.Phase == TurnPhase.AwaitingAction &&
                                   state.PendingAction == PendingAction.BuyProperty);
-            _upgradeButton.SetEnabled(canAct && state.Phase == TurnPhase.AwaitingAction &&
-                                      state.PendingAction == PendingAction.UpgradeProperty);
-            _endTurnButton.SetEnabled(canAct &&
+            _upgradeButton.SetEnabled(canAct && (
+                state.Phase == TurnPhase.AwaitingAction && state.PendingAction == PendingAction.UpgradeProperty ||
+                state.CanUpgradeOwnedProperty && state.Phase == TurnPhase.AwaitingEndTurn));
+            _endTurnButton.SetEnabled(canAct && state.PendingAction != PendingAction.ChooseRoute &&
                                        (state.Phase == TurnPhase.AwaitingAction || state.Phase == TurnPhase.AwaitingEndTurn));
             _newGameButton.SetEnabled(!busy);
         }

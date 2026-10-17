@@ -327,7 +327,7 @@ namespace Richman.Core
 
     public static class PrototypeBoardFactory
     {
-        private const int MainRouteCount = 40;
+        private const int MainRouteCount = 41;
 
         public static BoardDefinition Create()
         {
@@ -341,7 +341,8 @@ namespace Richman.Core
                 "bali-ubud-terraces", "bali-cliff-resort", "mumbai-crawford-market", "dubai-creek", "airport-dubai",
                 "rome-colosseum", "rome-trastevere", "paris-montmartre", "paris-louvre", "london-westminster",
                 "london-prison", "london-covent-garden", "destiny-open-ticket", "new-york-central-park", "new-york-broadway",
-                "rio-carnival", "cape-town-table-mountain", "lisbon-yellow-tram", "airport-jfk", "madrid-retiro-park"
+                "rio-carnival", "cape-town-table-mountain", "lisbon-yellow-tram", "airport-jfk", "madrid-retiro-park",
+                "paris-court"
             };
 
             for (var i = 0; i < MainRouteCount; i++)
@@ -353,13 +354,13 @@ namespace Richman.Core
                 tiles.Add(CreateMainTile(i, ids[i], next.ToArray()));
             }
 
-            tiles.Add(Simple(40, "macau-ferry-pier", BoardTileType.Transit, "澳門渡輪碼頭", new[] { "macau-heritage-quarter" }, false, "hong-kong-victoria-peak"));
-            tiles.Add(Property(41, "macau-heritage-quarter", "澳門歷史城區", "macau", 180, 18, 70, new[] { 18, 36, 65, 110, 170 }, new[] { "hong-kong-victoria-peak" }, false, "hong-kong-victoria-peak"));
-            tiles.Add(Simple(42, "ubud-ridge-rail", BoardTileType.Transit, "烏布山脊觀景列車", new[] { "bali-rice-terraces" }, false, "bali-cliff-resort"));
-            tiles.Add(Property(43, "bali-rice-terraces", "峇里島梯田步道", "bali", 200, 20, 80, new[] { 20, 40, 72, 120, 185 }, new[] { "bali-cliff-resort" }, false, "bali-cliff-resort"));
-            tiles.Add(Simple(44, "thames-river-cruise", BoardTileType.Transit, "泰晤士河遊船", new[] { "shakespeare-globe" }, false, "destiny-open-ticket"));
-            tiles.Add(Property(45, "shakespeare-globe", "莎士比亞環球劇場", "london", 240, 24, 95, new[] { 24, 48, 86, 145, 220 }, new[] { "london-southbank" }, false, "destiny-open-ticket"));
-            tiles.Add(Property(46, "london-southbank", "倫敦南岸藝文區", "london", 260, 26, 105, new[] { 26, 52, 94, 158, 240 }, new[] { "destiny-open-ticket" }, false, "destiny-open-ticket"));
+            tiles.Add(Simple(41, "macau-ferry-pier", BoardTileType.Transit, "澳門渡輪碼頭", new[] { "macau-heritage-quarter" }, false, "hong-kong-victoria-peak"));
+            tiles.Add(Property(42, "macau-heritage-quarter", "澳門歷史城區", "macau", 180, 18, 70, new[] { 18, 36, 65, 110, 170 }, new[] { "hong-kong-victoria-peak" }, false, "hong-kong-victoria-peak"));
+            tiles.Add(Simple(43, "ubud-ridge-rail", BoardTileType.Transit, "烏布山脊觀景列車", new[] { "bali-rice-terraces" }, false, "bali-cliff-resort"));
+            tiles.Add(Property(44, "bali-rice-terraces", "峇里島梯田步道", "bali", 200, 20, 80, new[] { 20, 40, 72, 120, 185 }, new[] { "bali-cliff-resort" }, false, "bali-cliff-resort"));
+            tiles.Add(Simple(45, "thames-river-cruise", BoardTileType.Transit, "泰晤士河遊船", new[] { "shakespeare-globe" }, false, "destiny-open-ticket"));
+            tiles.Add(Property(46, "shakespeare-globe", "莎士比亞環球劇場", "london", 240, 24, 95, new[] { 24, 48, 86, 145, 220 }, new[] { "london-southbank" }, false, "destiny-open-ticket"));
+            tiles.Add(Property(47, "london-southbank", "倫敦南岸藝文區", "london", 260, 26, 105, new[] { 26, 52, 94, 158, 240 }, new[] { "destiny-open-ticket" }, false, "destiny-open-ticket"));
 
             return new BoardDefinition(tiles);
         }
@@ -395,7 +396,7 @@ namespace Richman.Core
                 case 24: return Airport(index, id, "杜拜國際機場", "airport-jfk", next);
                 case 25: return Property(index, id, "羅馬競技場廣場", "italy", 240, 24, 96, new[] { 24, 48, 86, 144, 222 }, next);
                 case 26: return Property(index, id, "羅馬特拉斯提弗列", "italy", 225, 22, 90, new[] { 22, 44, 79, 132, 204 }, next);
-                case 27: return Effect(index, id, BoardTileType.Court, "巴黎國際法院", 100, next);
+                case 27: return Property(index, id, "巴黎蒙馬特街區", "france", 250, 25, 100, new[] { 25, 50, 90, 150, 230 }, next);
                 case 28: return Property(index, id, "羅浮宮花園", "france", 275, 27, 110, new[] { 27, 54, 97, 162, 250 }, next);
                 case 29: return Property(index, id, "倫敦西敏寺區", "london", 260, 26, 104, new[] { 26, 52, 94, 156, 240 }, next);
                 case 30: return Effect(index, id, BoardTileType.Prison, "倫敦監獄", 1, next);
@@ -408,6 +409,7 @@ namespace Richman.Core
                 case 37: return Property(index, id, "里斯本 28 號電車街", "portugal", 230, 23, 92, new[] { 23, 46, 83, 138, 213 }, next);
                 case 38: return Airport(index, id, "甘迺迪國際機場", "airport-dubai", next);
                 case 39: return Property(index, id, "馬德里麗池公園", "spain", 235, 23, 94, new[] { 23, 46, 83, 138, 213 }, next);
+                case 40: return Effect(index, id, BoardTileType.Court, "巴黎國際法院", 100, next);
                 default: throw new ArgumentOutOfRangeException(nameof(index));
             }
         }
