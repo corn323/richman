@@ -23,7 +23,8 @@ namespace Richman.Core
     {
         None,
         BuyProperty,
-        UpgradeProperty
+        UpgradeProperty,
+        ChooseRoute
     }
 
     public sealed class GameModeConfig
@@ -35,7 +36,10 @@ namespace Richman.Core
             int startingMoney,
             int startBonus,
             int taxAmount,
-            int bonusAmount)
+            int bonusAmount,
+            int completeDistrictRentBonusPercent = 50,
+            int completeDistrictReward = 120,
+            int turnLimit = int.MaxValue)
         {
             if (string.IsNullOrWhiteSpace(gameModeId)) throw new ArgumentException("Game mode id is required.", nameof(gameModeId));
             if (minPlayers < 1) throw new ArgumentOutOfRangeException(nameof(minPlayers));
@@ -44,6 +48,9 @@ namespace Richman.Core
             if (startBonus < 0) throw new ArgumentOutOfRangeException(nameof(startBonus));
             if (taxAmount < 0) throw new ArgumentOutOfRangeException(nameof(taxAmount));
             if (bonusAmount < 0) throw new ArgumentOutOfRangeException(nameof(bonusAmount));
+            if (completeDistrictRentBonusPercent < 0) throw new ArgumentOutOfRangeException(nameof(completeDistrictRentBonusPercent));
+            if (completeDistrictReward < 0) throw new ArgumentOutOfRangeException(nameof(completeDistrictReward));
+            if (turnLimit < 1) throw new ArgumentOutOfRangeException(nameof(turnLimit));
 
             GameModeId = gameModeId;
             MinPlayers = minPlayers;
@@ -52,6 +59,9 @@ namespace Richman.Core
             StartBonus = startBonus;
             TaxAmount = taxAmount;
             BonusAmount = bonusAmount;
+            CompleteDistrictRentBonusPercent = completeDistrictRentBonusPercent;
+            CompleteDistrictReward = completeDistrictReward;
+            TurnLimit = turnLimit;
         }
 
         public string GameModeId { get; }
@@ -61,10 +71,13 @@ namespace Richman.Core
         public int StartBonus { get; }
         public int TaxAmount { get; }
         public int BonusAmount { get; }
+        public int CompleteDistrictRentBonusPercent { get; }
+        public int CompleteDistrictReward { get; }
+        public int TurnLimit { get; }
 
         public static GameModeConfig ClassicBankruptcyFourPlayer()
         {
-            return new GameModeConfig("classic-bankruptcy", 4, 4, 1500, 200, 100, 75);
+            return new GameModeConfig("world-tour-classic", 4, 4, 1500, 200, 100, 75, 50, 120, 240);
         }
     }
 
@@ -180,14 +193,22 @@ namespace Richman.Core
 
     public sealed class GameOutcome
     {
-        internal GameOutcome(int winnerId, int turnNumber)
+        internal GameOutcome(int winnerId, int turnNumber, VictoryReason reason)
         {
             WinnerId = winnerId;
             TurnNumber = turnNumber;
+            Reason = reason;
         }
 
         public int WinnerId { get; }
         public int TurnNumber { get; }
+        public VictoryReason Reason { get; }
+    }
+
+    public enum VictoryReason
+    {
+        LastPlayerStanding,
+        HighestNetWorthAtTurnLimit
     }
 
     public sealed class GameState
@@ -196,6 +217,9 @@ namespace Richman.Core
         private readonly List<PropertyState> _properties;
         private readonly ReadOnlyCollection<PlayerState> _playersView;
         private readonly ReadOnlyCollection<PropertyState> _propertiesView;
+        private readonly HashSet<string> _districtRewardsPaid = new HashSet<string>(StringComparer.Ordinal);
+        private string[] _routeChoiceTileIds = Array.Empty<string>();
+        private IReadOnlyList<string> _routeChoiceTileIdsView;
 
         internal GameState(GameModeConfig mode, BoardDefinition board, List<PlayerState> players, List<PropertyState> properties)
         {
@@ -205,6 +229,7 @@ namespace Richman.Core
             _properties = properties;
             _playersView = _players.AsReadOnly();
             _propertiesView = _properties.AsReadOnly();
+            _routeChoiceTileIdsView = Array.AsReadOnly(_routeChoiceTileIds);
             CurrentPlayerId = players[0].Id;
             TurnNumber = 1;
             Phase = TurnPhase.AwaitingRoll;
@@ -222,7 +247,21 @@ namespace Richman.Core
         public DiceResult LastDiceResult { get; internal set; }
         public MapCard LastDrawnCard { get; internal set; }
         public string LastEventMessage { get; internal set; } = string.Empty;
+        public int MovementStepsRemaining { get; internal set; }
+        public IReadOnlyList<string> RouteChoiceTileIds => _routeChoiceTileIdsView;
         public GameOutcome Outcome { get; internal set; }
+
+        internal void SetRouteChoices(IReadOnlyList<BoardTileDefinition> tiles)
+        {
+            _routeChoiceTileIds = new string[tiles == null ? 0 : tiles.Count];
+            for (var i = 0; i < _routeChoiceTileIds.Length; i++) _routeChoiceTileIds[i] = tiles[i].Id;
+            _routeChoiceTileIdsView = Array.AsReadOnly(_routeChoiceTileIds);
+        }
+
+        internal bool TryMarkDistrictRewardPaid(int playerId, string districtId)
+        {
+            return _districtRewardsPaid.Add(playerId + ":" + districtId);
+        }
 
         public PlayerState GetPlayer(int playerId)
         {

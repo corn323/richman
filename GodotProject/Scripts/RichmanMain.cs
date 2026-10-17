@@ -28,7 +28,7 @@ namespace Richman.GodotPresentation
             _camera.FocusOverview();
             _hud = new GodotGameplayHud { Name = "GameplayHUD" };
             AddChild(_hud);
-            _hud.Build(Roll, Buy, Upgrade, EndTurn);
+            _hud.Build(Roll, Buy, Upgrade, EndTurn, ChooseRoute);
             _board.ApplyState(_session.State);
             _board.SyncPawns(_session.State);
             _hud.Render(_session.State, "Player 1, roll the dice.", false);
@@ -65,7 +65,6 @@ namespace Richman.GodotPresentation
         {
             if (_busy || _session.State.Outcome != null) return;
             var player = _session.State.GetPlayer(_session.State.CurrentPlayerId);
-            var from = player.CurrentTileIndex;
             var result = _session.Execute(new RollDiceCommand(player.Id));
             if (!result.Succeeded) { _hud.Render(_session.State, result.ErrorMessage, false); return; }
             if (result.DiceResult == null)
@@ -81,9 +80,8 @@ namespace Richman.GodotPresentation
             _camera.Focus(_dice.GlobalPosition, 10f);
             await _dice.Roll(result.DiceResult);
             _camera.Focus(_board.GetPawn(player.Id).GlobalPosition, 10f);
-            await _board.AnimatePawn(player.Id, from, result.DiceResult.Total);
-            var rolledDestination = (from + result.DiceResult.Total) % _session.Board.TileCount;
-            if (player.CurrentTileIndex != rolledDestination)
+            await _board.AnimatePawn(player.Id, result.PathTileIndices);
+            if (result.PathTileIndices.Count > 0 && result.PathTileIndices[result.PathTileIndices.Count - 1] != player.CurrentTileIndex)
             {
                 await _board.AnimateTransfer(player.Id, player.CurrentTileIndex);
                 _camera.Focus(_board.GetPawn(player.Id).GlobalPosition, 10f);
@@ -105,20 +103,20 @@ namespace Richman.GodotPresentation
             _hud.Render(_session.State, string.IsNullOrEmpty(eventMessage) ? "Landed on " + _session.State.Board.GetTileAt(player.CurrentTileIndex).DisplayName : eventMessage, false);
         }
 
-        public override void _UnhandledInput(InputEvent @event)
+        private async void ChooseRoute(string nextTileId)
         {
-            if (!(@event is InputEventKey key) || !key.Pressed || key.Echo || key.Keycode != Key.B || _busy || _lastLandingPlayerId == 0) return;
-            var last = _session.State.GetPlayer(_lastLandingPlayerId);
-            if (last.CurrentTileIndex != 17) return;
+            if (_busy || _session.State.Outcome != null) return;
+            var playerId = _session.State.CurrentPlayerId;
+            var result = _session.Execute(new ChooseRouteCommand(playerId, nextTileId));
+            if (!result.Succeeded) { _hud.Render(_session.State, result.ErrorMessage, false); return; }
             _busy = true;
-            _ = AnimateScenicBranch(last.Id, last.CurrentTileIndex);
-        }
-
-        private async System.Threading.Tasks.Task AnimateScenicBranch(int playerId, int tileIndex)
-        {
-            await _board.AnimateBranch(playerId, tileIndex);
-            _camera.Focus(_board.GetPawn(playerId).GlobalPosition, 34f);
+            _hud.Render(_session.State, "沿所選路線前進…", true);
+            await _board.AnimatePawn(playerId, result.PathTileIndices);
+            _camera.Focus(_board.GetPawn(playerId).GlobalPosition, 10f);
+            _board.ApplyState(_session.State);
             _busy = false;
+            var landing = _session.State.Board.GetTileAt(_session.State.GetPlayer(playerId).CurrentTileIndex);
+            _hud.Render(_session.State, string.IsNullOrEmpty(_session.State.LastEventMessage) ? "抵達 " + landing.DisplayName : _session.State.LastEventMessage, false);
         }
 
         private void Buy()

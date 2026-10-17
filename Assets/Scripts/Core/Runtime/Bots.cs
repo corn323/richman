@@ -20,6 +20,8 @@ namespace Richman.Core
             {
                 case TurnPhase.AwaitingRoll: return new RollDiceCommand(playerId);
                 case TurnPhase.AwaitingAction:
+                    if (state.PendingAction == PendingAction.ChooseRoute && state.RouteChoiceTileIds.Count > 0)
+                        return new ChooseRouteCommand(playerId, state.RouteChoiceTileIds[0]);
                     var tile = state.Board.GetTileAt(player.CurrentTileIndex);
                     if (state.PendingAction == PendingAction.BuyProperty && player.Money >= tile.PurchasePrice)
                     {

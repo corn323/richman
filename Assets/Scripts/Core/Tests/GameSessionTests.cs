@@ -13,7 +13,8 @@ namespace Richman.Core.Tests
 
             Assert.That(session.State.Players.Count, Is.EqualTo(session.Mode.MaxPlayers));
             Assert.That(session.State.Players, Has.All.Property("Status").EqualTo(PlayerStatus.Active));
-            Assert.That(session.Board.TileCount, Is.EqualTo(36));
+            Assert.That(session.Board.MainRouteTileCount, Is.EqualTo(40));
+            Assert.That(session.Board.TileCount, Is.EqualTo(47));
             Assert.That(session.Board.GetTileAt(1).Type, Is.EqualTo(BoardTileType.Property));
             Assert.That(session.Board.GetTileAt(1).PurchasePrice, Is.EqualTo(120));
         }
@@ -23,16 +24,79 @@ namespace Richman.Core.Tests
         {
             var board = PrototypeBoardFactory.Create();
 
-            Assert.That(board.TileCount, Is.EqualTo(36));
-            Assert.That(board.GetTileAt(1).Id, Is.EqualTo("tokyo"));
-            Assert.That(board.GetTileAt(2).Type, Is.EqualTo(BoardTileType.Chance));
-            Assert.That(board.GetTileAt(4).Type, Is.EqualTo(BoardTileType.Destiny));
-            Assert.That(board.GetTileAt(5).Id, Is.EqualTo("airport-1"));
-            Assert.That(board.GetTileAt(13).Type, Is.EqualTo(BoardTileType.Hospital));
-            Assert.That(board.GetTileAt(23).Type, Is.EqualTo(BoardTileType.Prison));
-            Assert.That(board.GetTileAt(25).Id, Is.EqualTo("airport-2"));
-            Assert.That(board.GetTileAt(27).Type, Is.EqualTo(BoardTileType.Court));
-            Assert.That(board.GetTileAt(35).Id, Is.EqualTo("summit-forum"));
+            Assert.That(board.MainRouteTileCount, Is.EqualTo(40));
+            Assert.That(board.TileCount, Is.EqualTo(47));
+            Assert.That(board.GetTileAt(0).Id, Is.EqualTo("start-singapore"));
+            Assert.That(board.GetTileAt(3).Type, Is.EqualTo(BoardTileType.Airport));
+            Assert.That(board.GetTileAt(30).Id, Is.EqualTo("london-prison"));
+            Assert.That(board.GetTileAt(30).Type, Is.EqualTo(BoardTileType.Prison));
+            Assert.That(board.GetTileAt(39).NextTileIds[0], Is.EqualTo("start-singapore"));
+            Assert.That(board.GetTile("macau-heritage-quarter").RejoinsAtId, Is.EqualTo("hong-kong-victoria-peak"));
+            Assert.That(board.GetNextTiles(10).Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ChoosingTravelBranchConsumesRemainingStepsAndRejoinsTheMainRoute()
+        {
+            var session = CreateSession(
+                GameModeConfig.ClassicBankruptcyFourPlayer(),
+                PrototypeBoardFactory.Create().Tiles,
+                new ScriptedDiceRoller(new DiceResult(4, 4), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(3, 3)));
+            session.Execute(new RollDiceCommand(1));
+            session.Execute(new EndTurnCommand(1));
+            for (var playerId = 2; playerId <= 4; playerId++)
+            {
+                session.Execute(new RollDiceCommand(playerId));
+                session.Execute(new EndTurnCommand(playerId));
+            }
+
+            var toJunction = session.Execute(new RollDiceCommand(1));
+
+            Assert.That(toJunction.Succeeded, Is.True);
+            Assert.That(toJunction.PathTileIndices, Is.EqualTo(new[] { 9, 10 }));
+            Assert.That(session.State.PendingAction, Is.EqualTo(PendingAction.ChooseRoute));
+            Assert.That(session.State.MovementStepsRemaining, Is.EqualTo(4));
+            Assert.That(session.Execute(new ChooseRouteCommand(1, "not-a-route")).ErrorCode, Is.EqualTo(CommandErrorCode.InvalidRouteChoice));
+
+            var branch = session.Execute(new ChooseRouteCommand(1, "macau-ferry-pier"));
+
+            Assert.That(branch.Succeeded, Is.True);
+            Assert.That(branch.PathTileIndices, Is.EqualTo(new[] { 40, 41, 11, 12 }));
+            Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(12));
+            Assert.That(session.State.PendingAction, Is.EqualTo(PendingAction.None));
+            Assert.That(session.State.MovementStepsRemaining, Is.Zero);
+        }
+
+        [Test]
+        public void CompletingDistrictPaysCollectionRewardAndRaisesItsRent()
+        {
+            var session = CreateSession(
+                new GameModeConfig("test", 2, 2, 1000, 0, 50, 25),
+                new[]
+                {
+                    Tile("start", BoardTileType.Start, 0),
+                    Tile("rest-1", BoardTileType.Rest, 1),
+                    PropertyInDistrict("east-1", "east", 2, 100, 10),
+                    Tile("rest-2", BoardTileType.Rest, 3),
+                    PropertyInDistrict("east-2", "east", 4, 100, 20),
+                    Tile("rest-3", BoardTileType.Rest, 5),
+                    Tile("rest-4", BoardTileType.Rest, 6)
+                },
+                new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1)));
+
+            session.Execute(new RollDiceCommand(1));
+            session.Execute(new BuyPropertyCommand(1));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+            session.Execute(new EndTurnCommand(2));
+            session.Execute(new RollDiceCommand(1));
+            session.Execute(new BuyPropertyCommand(1));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(930));
+            session.Execute(new EndTurnCommand(1));
+            session.Execute(new RollDiceCommand(2));
+
+            Assert.That(session.State.GetPlayer(2).Money, Is.EqualTo(960));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(960));
         }
 
         [Test]
@@ -276,6 +340,11 @@ namespace Richman.Core.Tests
         private static BoardTileDefinition Property(string id, int price, int baseRent, int upgradeCost, int positionIndex, params int[] rents)
         {
             return new BoardTileDefinition(id, BoardTileType.Property, id, positionIndex, price, baseRent, upgradeCost, rents, "test", id);
+        }
+
+        private static BoardTileDefinition PropertyInDistrict(string id, string districtId, int positionIndex, int price, int baseRent)
+        {
+            return new BoardTileDefinition(id, BoardTileType.Property, id, positionIndex, price, baseRent, 50, new[] { baseRent, baseRent * 2 }, districtId, id);
         }
 
         private sealed class ScriptedDiceRoller : IDiceRoller

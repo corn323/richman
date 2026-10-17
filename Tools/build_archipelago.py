@@ -8,6 +8,10 @@ os.makedirs(ASSET, exist_ok=True); os.makedirs(DATA, exist_ok=True)
 
 # Preserve all existing objects and add the map to its own categorized collections.
 scene = bpy.context.scene
+with open(os.path.join(DATA, 'archipelago_tiles.json'), encoding='utf-8') as source:
+    CORE_MAP = json.load(source)
+CORE_TILES = CORE_MAP['tiles']
+CORE_MAIN_COUNT = CORE_MAP['main_route_tile_count']
 scene.render.engine = 'BLENDER_EEVEE'
 scene.render.resolution_x = 1440; scene.render.resolution_y = 1100; scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = 'PNG'; scene.render.film_transparent = False
@@ -71,26 +75,17 @@ def tube(name, points, radius, material, col, cyclic=False):
         if linked not in MAP_COLLECTIONS: linked.objects.unlink(ob)
     cu.materials.append(material); return ob
 
-# Coordinates in X/Z are intentionally shared with the independent Godot tile JSON.
-n=36; rx=11.7; rz=8.3; coords=[]
-for i in range(n):
-    a=2*math.pi*i/n-math.pi/2
-    # softened oblong loop with slight handmade curvature; feet stay on terraces
-    x=rx*math.cos(a)+.42*math.sin(3*a); z=rz*math.sin(a)+.30*math.sin(2*a)
-    coords.append((x,z))
-heights=[.62+.28*math.sin(i*.71)+.13*math.sin(i*1.89) for i in range(n)]
+# Positions and route ids come from the shared Core export.
+n=CORE_MAIN_COUNT
+coords=[(t['position']['x'], t['position']['z']) for t in CORE_TILES[:n]]
+heights=[t['position']['y'] for t in CORE_TILES[:n]]
 names=['Central Station','Tokyo','Community Garden','Canal Row','Rooftop Park','Sky Tram','Copper Workshop','City Maintenance','Sunset Apartments','Old Clock Tower','Pixel Arcade','Street Fair','Skyline Lab','Quiet Courtyard','Harbor Exchange','Ferry Terminal','Bamboo Court','Transit Fund','Mosaic Plaza','Observation Deck','Rainy Day Theater','Public Art Fund','Foundry Lane','Rooftop Garden','Solaris Heights','Monorail Loop','Tideglass Pier','Infrastructure Works','Northlight Studios','Quiet Alley','Crescent Bazaar','Festival Grant','Neon Garden','Riverside Rest','Aster Foundry','Summit Forum']
 types=['start']+['property' if i not in (2,4,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33) else ({2:'chance',4:'destiny',5:'airport',7:'tax',9:'landmark',11:'chance',13:'hospital',15:'transit',17:'destiny',19:'landmark',21:'chance',23:'prison',25:'airport',27:'court',29:'destiny',31:'chance',33:'special'}[i]) for i in range(1,n)]
 special_names={0:'START · Central Station',2:'Chance · Festival',4:'Destiny · Sky Tram',5:'Airport · Air Route',7:'City Maintenance',9:'Old Clock Tower',11:'Chance · Street Fair',13:'Hospital',15:'Ferry Terminal',17:'Destiny · Transit',19:'Observation Deck',21:'Chance · Public Art',23:'Prison',25:'Airport · Island Hopper',27:'Court',29:'Destiny · Royal Decree',31:'Chance · Crescent Bazaar',33:'Riverside Rest'}
 tiles=[]
-for i,(x,z) in enumerate(coords):
-    t=types[i]; name=special_names.get(i,names[i]); y=heights[i]+.16
-    tile={'id':'start' if i==0 else (('airport-1' if i==5 else 'airport-2') if t=='airport' else 'prison' if t=='prison' else 'hospital' if t=='hospital' else 'court' if t=='court' else ('chance-'+str(i) if t=='chance' else 'destiny-'+str(i) if t=='destiny' else names[i].lower().replace(' ','-'))),'position_index':i,'type':t,'display_name':name,'x':round(x,3),'y':round(y,3),'z':round(z,3),'rotation':round(-math.degrees(math.atan2((coords[(i+1)%n][1]-z),(coords[(i+1)%n][0]-x))),2),'next_tiles':['start' if i==n-1 else ('airport' if i+1==5 else 'prison' if i+1==23 else 'hospital' if i+1==13 else 'court' if i+1==27 else ('chance-'+str(i+1) if types[(i+1)%n]=='chance' else 'destiny-'+str(i+1) if types[(i+1)%n]=='destiny' else names[(i+1)%n].lower().replace(' ','-')))],'branch_tiles':[],'main_route':True,'bounds':{'x':1.36,'z':1.12}}
-    if i==0: tile['id']='start'; tile['next_tiles']=['tokyo']
-    elif i+1<n and i+1 not in (0,):
-        nextidx=i+1; tile['next_tiles']=[(('airport-1' if nextidx==5 else 'airport-2') if nextidx in (5,25) else 'prison' if nextidx==23 else 'hospital' if nextidx==13 else 'court' if nextidx==27 else ('chance-'+str(nextidx) if types[nextidx]=='chance' else 'destiny-'+str(nextidx) if types[nextidx]=='destiny' else names[nextidx].lower().replace(' ','-')))]
-    elif i==n-1: tile['next_tiles']=['start']
-    tiles.append(tile)
+for i,tile in enumerate(CORE_TILES):
+    x=tile['position']['x']; z=tile['position']['z']; y=tile['position']['y']+.16
+    t=tile['type'].lower(); name=tile['display_name']; tile=dict(tile); tiles.append(tile)
     plate_mat=gold if t=='start' else red if t=='airport' else dark if t=='prison' else white if t=='hospital' else cliff if t=='court' else pink if t=='chance' else fate if t=='destiny' else mat('District_'+str(i),((.30+.55*(i%3)/2),(.44+.42*((i+1)%4)/3),(.28+.52*((i+2)%5)/4)))
     # path module with border and bright readable top
     tileob=cube('TileSocket_%02d_%s'%(i,t),(x,y-.12,z),(1.40,.28,1.17),roadedge,route,.11); tileob['tile_id']=tile['id']; tileob['position_index']=i; tileob['tile_type']=t
@@ -99,7 +94,8 @@ for i,(x,z) in enumerate(coords):
     cube('DistrictBand_%02d'%i,(x,y+.105,z+.42),(1.12,.07,.12),gold if t=='start' else roofblue if t=='property' else plate_mat,route,.025)
     label('TileLabel_%02d'%i,name,(x,y+.28,z-.36),.18,dark if t in ('start','hospital','chance','destiny','property') else white2,route)
     if t in ('start','airport','hospital','prison','court','chance','destiny'):
-        icon={'start':'START','airport':'✈','hospital':'+','prison':'JAIL','court':'§','chance':'?','destiny':'✦'}[t]
+        icon={'start':'START','airport':'✈','hospital':'+','prison':'JAIL','court':'§','chance':'?','destiny':'✦'}.get(t,'')
+        if icon:
         label('Icon_%02d'%i,icon,(x,y+.34,z+.12),.30,white2 if t in ('airport','prison','destiny') else dark,route)
 
 # Stylized sculpted coastline: layered stepped land mass with rocky vertical faces.

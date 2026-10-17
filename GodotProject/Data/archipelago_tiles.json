@@ -1,783 +1,1228 @@
 {
-  "version": 1,
-  "units": "meters",
-  "coordinate_system": "Godot Y-up; Blender Z-up converted by glTF exporter",
-  "main_route": [
-    "start",
-    "tokyo",
-    "chance-2",
-    "canal-row",
-    "destiny-4",
-    "airport-1",
-    "copper-workshop",
-    "city-maintenance",
-    "sunset-apartments",
-    "old-clock-tower",
-    "pixel-arcade",
-    "chance-11",
-    "skyline-lab",
-    "hospital",
-    "harbor-exchange",
-    "ferry-terminal",
-    "bamboo-court",
-    "destiny-17",
-    "mosaic-plaza",
-    "observation-deck",
-    "rainy-day-theater",
-    "chance-21",
-    "foundry-lane",
-    "prison",
-    "solaris-heights",
-    "airport-2",
-    "tideglass-pier",
-    "court",
-    "northlight-studios",
-    "destiny-29",
-    "crescent-bazaar",
-    "chance-31",
-    "neon-garden",
-    "riverside-rest",
-    "aster-foundry",
-    "summit-forum"
-  ],
-  "branch_routes": [
-    {
-      "id": "scenic-overlook",
-      "type": "branch_waypoint",
-      "display_name": "Island Lookout",
-      "x": 5.4,
-      "y": 0.95,
-      "z": 4.85,
-      "rotation": 0,
-      "next_tiles": [
-        "lookout-return"
-      ],
-      "branch_tiles": [],
-      "rejoins_at": "mosaic-plaza",
-      "purpose": "optional scenic route choice; returns to main loop",
-      "main_route": false,
-      "position_index": 36
-    }
-  ],
+  "main_route_tile_count": 40,
   "tiles": [
     {
-      "id": "start",
+      "id": "start-singapore",
+      "type": "Start",
+      "display_name": "\u8D77\u9EDE\u30FB\u65B0\u52A0\u5761",
       "position_index": 0,
-      "type": "start",
-      "display_name": "START · Central Station",
-      "x": 0.42,
-      "y": 0.78,
-      "z": -8.3,
-      "rotation": -0.68,
+      "position": {
+        "x": 0.42,
+        "y": 0.62,
+        "z": -8.3
+      },
+      "rotation": -0.30442086,
       "next_tiles": [
-        "tokyo"
+        "singapore-gardens"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "tokyo",
+      "id": "singapore-gardens",
+      "type": "Property",
+      "display_name": "\u6FF1\u6D77\u7063\u82B1\u5712",
       "position_index": 1,
-      "type": "property",
-      "display_name": "Tokyo",
-      "x": 2.395,
-      "y": 1.086,
-      "z": -8.277,
-      "rotation": -8.89,
+      "position": {
+        "x": 2.204506,
+        "y": 0.7907574,
+        "z": -8.290519
+      },
+      "rotation": -7.5731072,
       "next_tiles": [
-        "chance-2"
+        "singapore-marina"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "singapore",
+      "price": 140,
+      "rent": 14,
+      "upgrade_cost": 55,
+      "rent_levels": [
+        14,
+        28,
+        50,
+        84,
+        130
+      ]
     },
     {
-      "id": "chance-2",
+      "id": "singapore-marina",
+      "type": "Property",
+      "display_name": "\u6FF1\u6D77\u7063\u91D1\u6C99\u6B65\u9053",
       "position_index": 2,
-      "type": "chance",
-      "display_name": "Chance · Festival",
-      "x": 4.212,
-      "y": 0.979,
-      "z": -7.992,
-      "rotation": -18.38,
+      "position": {
+        "x": 3.8623686,
+        "y": 0.7364701,
+        "z": -8.070105
+      },
+      "rotation": -15.916784,
       "next_tiles": [
-        "canal-row"
+        "airport-changi"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "singapore",
+      "price": 160,
+      "rent": 16,
+      "upgrade_cost": 65,
+      "rent_levels": [
+        16,
+        32,
+        58,
+        98,
+        150
+      ]
     },
     {
-      "id": "canal-row",
+      "id": "airport-changi",
+      "type": "Airport",
+      "display_name": "\u6A1F\u5B9C\u570B\u969B\u6A5F\u5834",
       "position_index": 3,
-      "type": "property",
-      "display_name": "Canal Row",
-      "x": 5.85,
-      "y": 0.943,
-      "z": -7.448,
-      "rotation": -28.54,
+      "position": {
+        "x": 5.3773913,
+        "y": 0.7153452,
+        "z": -7.638059
+      },
+      "rotation": -24.969154,
       "next_tiles": [
-        "destiny-4"
+        "chance-global-fair"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "destiny-4",
+      "id": "chance-global-fair",
+      "type": "Chance",
+      "display_name": "\u6A5F\u6703\u30FB\u4E16\u754C\u535A\u89BD\u6703",
       "position_index": 4,
-      "type": "destiny",
-      "display_name": "Destiny · Sky Tram",
-      "x": 7.311,
-      "y": 0.988,
-      "z": -6.654,
-      "rotation": -38.45,
+      "position": {
+        "x": 6.7473,
+        "y": 0.7345235,
+        "z": -7.000158
+      },
+      "rotation": -34.07339,
       "next_tiles": [
-        "airport-1"
+        "kyoto-gion"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "airport-1",
+      "id": "kyoto-gion",
+      "type": "Property",
+      "display_name": "\u4EAC\u90FD\u7947\u5712\u753A\u5BB6",
       "position_index": 5,
-      "type": "airport",
-      "display_name": "Airport · Air Route",
-      "x": 8.599,
-      "y": 0.666,
-      "z": -5.631,
-      "rotation": -47.63,
+      "position": {
+        "x": 7.9761643,
+        "y": 0.55469096,
+        "z": -6.1689863
+      },
+      "rotation": -42.680946,
       "next_tiles": [
-        "copper-workshop"
+        "kyoto-teahouse"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "japan",
+      "price": 150,
+      "rent": 15,
+      "upgrade_cost": 60,
+      "rent_levels": [
+        15,
+        30,
+        54,
+        90,
+        140
+      ]
     },
     {
-      "id": "copper-workshop",
+      "id": "kyoto-teahouse",
+      "type": "Property",
+      "display_name": "\u4EAC\u90FD\u8336\u5C4B\u5C0F\u5F91",
       "position_index": 6,
-      "type": "property",
-      "display_name": "Copper Workshop",
-      "x": 9.712,
-      "y": 0.406,
-      "z": -4.41,
-      "rotation": -56.33,
+      "position": {
+        "x": 9.066055,
+        "y": 0.41020626,
+        "z": -5.1639347
+      },
+      "rotation": -50.69753,
       "next_tiles": [
-        "city-maintenance"
+        "destiny-wayfinder"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "japan",
+      "price": 170,
+      "rent": 17,
+      "upgrade_cost": 68,
+      "rent_levels": [
+        17,
+        34,
+        61,
+        102,
+        158
+      ]
     },
     {
-      "id": "city-maintenance",
+      "id": "destiny-wayfinder",
+      "type": "Destiny",
+      "display_name": "\u547D\u904B\u30FB\u958B\u653E\u65C5\u5238",
       "position_index": 7,
-      "type": "tax",
-      "display_name": "City Maintenance",
-      "x": 10.631,
-      "y": 0.589,
-      "z": -3.032,
-      "rotation": -65.39,
+      "position": {
+        "x": 10.009947,
+        "y": 0.50839835,
+        "z": -4.010826
+      },
+      "rotation": -58.513626,
       "next_tiles": [
-        "sunset-apartments"
+        "osaka-dotonbori"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "sunset-apartments",
+      "id": "osaka-dotonbori",
+      "type": "Property",
+      "display_name": "\u5927\u962A\u9053\u9813\u5800\u5546\u5E97\u8857",
       "position_index": 8,
-      "type": "property",
-      "display_name": "Sunset Apartments",
-      "x": 11.312,
-      "y": 0.693,
-      "z": -1.544,
-      "rotation": -75.9,
+      "position": {
+        "x": 10.787574,
+        "y": 0.56806374,
+        "z": -2.7411766
+      },
+      "rotation": -66.83354,
       "next_tiles": [
-        "old-clock-tower"
+        "shinkansen-terminal"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "japan",
+      "price": 190,
+      "rent": 19,
+      "upgrade_cost": 76,
+      "rent_levels": [
+        19,
+        38,
+        68,
+        114,
+        176
+      ]
     },
     {
-      "id": "old-clock-tower",
+      "id": "shinkansen-terminal",
+      "type": "Transit",
+      "display_name": "\u6771\u6D77\u9053\u65B0\u5E79\u7DDA\u7AD9",
       "position_index": 9,
-      "type": "landmark",
-      "display_name": "Old Clock Tower",
-      "x": 11.7,
-      "y": 0.685,
-      "z": 0.0,
-      "rotation": -88.8,
+      "position": {
+        "x": 11.365277,
+        "y": 0.5695708,
+        "z": -1.3911111
+      },
+      "rotation": -76.47094,
       "next_tiles": [
-        "pixel-arcade"
+        "hong-kong-star-ferry"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "pixel-arcade",
+      "id": "hong-kong-star-ferry",
+      "type": "Special",
+      "display_name": "\u9999\u6E2F\u5929\u661F\u5C0F\u8F2A\u78BC\u982D",
       "position_index": 10,
-      "type": "property",
-      "display_name": "Pixel Arcade",
-      "x": 11.732,
-      "y": 0.991,
-      "z": 1.544,
-      "rotation": -104.12,
+      "position": {
+        "x": 11.7,
+        "y": 0.74016464,
+        "z": 0
+      },
+      "rotation": -88.08017,
       "next_tiles": [
-        "chance-11"
+        "hong-kong-victoria-peak",
+        "macau-ferry-pier"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "chance-11",
+      "id": "hong-kong-victoria-peak",
+      "type": "Property",
+      "display_name": "\u9999\u6E2F\u592A\u5E73\u5C71\u9802",
       "position_index": 11,
-      "type": "chance",
-      "display_name": "Chance · Street Fair",
-      "x": 11.358,
-      "y": 1.181,
-      "z": 3.032,
-      "rotation": -120.31,
+      "position": {
+        "x": 11.74663,
+        "y": 0.8451171,
+        "z": 1.3911111
+      },
+      "rotation": -101.69576,
       "next_tiles": [
-        "skyline-lab"
+        "hong-kong-harbor-dues"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "hong-kong",
+      "price": 210,
+      "rent": 21,
+      "upgrade_cost": 84,
+      "rent_levels": [
+        21,
+        42,
+        76,
+        126,
+        195
+      ]
     },
     {
-      "id": "skyline-lab",
+      "id": "hong-kong-harbor-dues",
+      "type": "Tax",
+      "display_name": "\u9999\u6E2F\u6E2F\u53E3\u901A\u884C\u8CBB",
       "position_index": 12,
-      "type": "property",
-      "display_name": "Skyline Lab",
-      "x": 10.552,
-      "y": 0.918,
-      "z": 4.41,
-      "rotation": -135.12,
+      "position": {
+        "x": 11.467149,
+        "y": 0.7013105,
+        "z": 2.7411766
+      },
+      "rotation": -116.30158,
       "next_tiles": [
-        "hospital"
+        "seoul-insadong"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "hospital",
+      "id": "seoul-insadong",
+      "type": "Property",
+      "display_name": "\u9996\u723E\u4EC1\u5BFA\u6D1E",
       "position_index": 13,
-      "type": "hospital",
-      "display_name": "Hospital",
-      "x": 9.326,
-      "y": 0.765,
-      "z": 5.631,
-      "rotation": -147.34,
+      "position": {
+        "x": 10.839605,
+        "y": 0.6136223,
+        "z": 4.010826
+      },
+      "rotation": -130.2061,
       "next_tiles": [
-        "harbor-exchange"
+        "seoul-gyeongbokgung"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "korea",
+      "price": 180,
+      "rent": 18,
+      "upgrade_cost": 72,
+      "rent_levels": [
+        18,
+        36,
+        65,
+        108,
+        168
+      ]
     },
     {
-      "id": "harbor-exchange",
+      "id": "seoul-gyeongbokgung",
+      "type": "Property",
+      "display_name": "\u666F\u798F\u5BAE\u6587\u5316\u8857\u5340",
       "position_index": 14,
-      "type": "property",
-      "display_name": "Harbor Exchange",
-      "x": 7.731,
-      "y": 0.768,
-      "z": 6.654,
-      "rotation": -157.11,
+      "position": {
+        "x": 9.864943,
+        "y": 0.6090979,
+        "z": 5.1639347
+      },
+      "rotation": -142.1808,
       "next_tiles": [
-        "ferry-terminal"
+        "airport-incheon"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "korea",
+      "price": 205,
+      "rent": 20,
+      "upgrade_cost": 82,
+      "rent_levels": [
+        20,
+        40,
+        72,
+        120,
+        185
+      ]
     },
     {
-      "id": "ferry-terminal",
+      "id": "airport-incheon",
+      "type": "Airport",
+      "display_name": "\u4EC1\u5DDD\u570B\u969B\u6A5F\u5834",
       "position_index": 15,
-      "type": "transit",
-      "display_name": "Ferry Terminal",
-      "x": 5.85,
-      "y": 0.507,
-      "z": 7.448,
-      "rotation": -165.18,
+      "position": {
+        "x": 8.570134,
+        "y": 0.46416745,
+        "z": 6.1689863
+      },
+      "rotation": -152.00081,
       "next_tiles": [
-        "bamboo-court"
+        "shanghai-bund"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "bamboo-court",
+      "id": "shanghai-bund",
+      "type": "Property",
+      "display_name": "\u4E0A\u6D77\u5916\u7058",
       "position_index": 16,
-      "type": "property",
-      "display_name": "Bamboo Court",
-      "x": 3.792,
-      "y": 0.398,
-      "z": 7.992,
-      "rotation": -172.38,
+      "position": {
+        "x": 7.0068746,
+        "y": 0.40589416,
+        "z": 7.000158
+      },
+      "rotation": -160.08652,
       "next_tiles": [
-        "destiny-17"
+        "shanghai-yu-garden"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "china",
+      "price": 220,
+      "rent": 22,
+      "upgrade_cost": 88,
+      "rent_levels": [
+        22,
+        44,
+        79,
+        132,
+        204
+      ]
     },
     {
-      "id": "destiny-17",
+      "id": "shanghai-yu-garden",
+      "type": "Property",
+      "display_name": "\u4E0A\u6D77\u8C6B\u5712",
       "position_index": 17,
-      "type": "destiny",
-      "display_name": "Destiny · Transit",
-      "x": 1.668,
-      "y": 0.732,
-      "z": 8.277,
-      "rotation": -179.36,
+      "position": {
+        "x": 5.2459865,
+        "y": 0.5896463,
+        "z": 7.638059
+      },
+      "rotation": -167.0399,
       "next_tiles": [
-        "mosaic-plaza"
+        "chance-night-market"
       ],
-      "branch_tiles": [
-        "scenic-overlook"
-      ],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "china",
+      "price": 200,
+      "rent": 20,
+      "upgrade_cost": 80,
+      "rent_levels": [
+        20,
+        40,
+        72,
+        120,
+        185
+      ]
     },
     {
-      "id": "mosaic-plaza",
+      "id": "chance-night-market",
+      "type": "Chance",
+      "display_name": "\u6A5F\u6703\u30FB\u591C\u5E02\u5947\u9047",
       "position_index": 18,
-      "type": "property",
-      "display_name": "Mosaic Plaza",
-      "x": -0.42,
-      "y": 0.906,
-      "z": 8.3,
-      "rotation": 173.4,
+      "position": {
+        "x": 3.368629,
+        "y": 0.68976176,
+        "z": 8.070105
+      },
+      "rotation": -173.42595,
       "next_tiles": [
-        "observation-deck"
+        "bangkok-floating-market"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "observation-deck",
+      "id": "bangkok-floating-market",
+      "type": "Property",
+      "display_name": "\u66FC\u8C37\u6C34\u4E0A\u5E02\u5834",
       "position_index": 19,
-      "type": "landmark",
-      "display_name": "Observation Deck",
-      "x": -2.395,
-      "y": 0.876,
-      "z": 8.071,
-      "rotation": 165.65,
+      "position": {
+        "x": 1.4560605,
+        "y": 0.6793088,
+        "z": 8.290519
+      },
+      "rotation": -179.71043,
       "next_tiles": [
-        "rainy-day-theater"
+        "bali-ubud-terraces"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "thailand",
+      "price": 190,
+      "rent": 19,
+      "upgrade_cost": 76,
+      "rent_levels": [
+        19,
+        38,
+        68,
+        114,
+        176
+      ]
     },
     {
-      "id": "rainy-day-theater",
+      "id": "bali-ubud-terraces",
+      "type": "Property",
+      "display_name": "\u5CC7\u91CC\u5CF6\u70CF\u5E03\u68AF\u7530",
       "position_index": 20,
-      "type": "property",
-      "display_name": "Rainy Day Theater",
-      "x": -4.212,
-      "y": 1.073,
-      "z": 7.607,
-      "rotation": 157.51,
+      "position": {
+        "x": -0.42,
+        "y": 0.78673446,
+        "z": 8.3
+      },
+      "rotation": 173.76724,
       "next_tiles": [
-        "chance-21"
+        "bali-cliff-resort",
+        "ubud-ridge-rail"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "bali",
+      "price": 180,
+      "rent": 18,
+      "upgrade_cost": 72,
+      "rent_levels": [
+        18,
+        36,
+        65,
+        108,
+        168
+      ]
     },
     {
-      "id": "chance-21",
+      "id": "bali-cliff-resort",
+      "type": "Property",
+      "display_name": "\u5CC7\u91CC\u5CF6\u6D77\u5D16\u5EA6\u5047\u6751",
       "position_index": 21,
-      "type": "chance",
-      "display_name": "Chance · Public Art",
-      "x": -5.85,
-      "y": 1.099,
-      "z": 6.928,
-      "rotation": 149.35,
+      "position": {
+        "x": -2.204506,
+        "y": 0.7984633,
+        "z": 8.105108
+      },
+      "rotation": 166.83844,
       "next_tiles": [
-        "foundry-lane"
+        "mumbai-crawford-market"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "bali",
+      "price": 215,
+      "rent": 21,
+      "upgrade_cost": 86,
+      "rent_levels": [
+        21,
+        42,
+        76,
+        126,
+        195
+      ]
     },
     {
-      "id": "foundry-lane",
+      "id": "mumbai-crawford-market",
+      "type": "Property",
+      "display_name": "\u5B5F\u8CB7\u514B\u52DE\u798F\u5E02\u5834",
       "position_index": 22,
-      "type": "property",
-      "display_name": "Foundry Lane",
-      "x": -7.311,
-      "y": 0.717,
-      "z": 6.063,
-      "rotation": 141.55,
+      "position": {
+        "x": -3.8623686,
+        "y": 0.58689225,
+        "z": 7.7174335
+      },
+      "rotation": 159.55507,
       "next_tiles": [
-        "prison"
+        "dubai-creek"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "india",
+      "price": 210,
+      "rent": 21,
+      "upgrade_cost": 84,
+      "rent_levels": [
+        21,
+        42,
+        76,
+        126,
+        195
+      ]
     },
     {
-      "id": "prison",
+      "id": "dubai-creek",
+      "type": "Property",
+      "display_name": "\u675C\u62DC\u6CB3\u7554\u5E02\u96C6",
       "position_index": 23,
-      "type": "prison",
-      "display_name": "Prison",
-      "x": -8.599,
-      "y": 0.553,
-      "z": 5.04,
-      "rotation": 134.09,
+      "position": {
+        "x": -5.3773913,
+        "y": 0.49245667,
+        "z": 7.152649
+      },
+      "rotation": 152.17206,
       "next_tiles": [
-        "solaris-heights"
+        "airport-dubai"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "uae",
+      "price": 230,
+      "rent": 23,
+      "upgrade_cost": 92,
+      "rent_levels": [
+        23,
+        46,
+        83,
+        138,
+        213
+      ]
     },
     {
-      "id": "solaris-heights",
+      "id": "airport-dubai",
+      "type": "Airport",
+      "display_name": "\u675C\u62DC\u570B\u969B\u6A5F\u5834",
       "position_index": 24,
-      "type": "property",
-      "display_name": "Solaris Heights",
-      "x": -9.712,
-      "y": 0.636,
-      "z": 3.89,
-      "rotation": 126.42,
+      "position": {
+        "x": -6.7473,
+        "y": 0.53323793,
+        "z": 6.429524
+      },
+      "rotation": 144.99757,
       "next_tiles": [
-        "airport-2"
+        "rome-colosseum"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "airport-2",
+      "id": "rome-colosseum",
+      "type": "Property",
+      "display_name": "\u7F85\u99AC\u7AF6\u6280\u5834\u5EE3\u5834",
       "position_index": 25,
-      "type": "airport",
-      "display_name": "Airport · Island Hopper",
-      "x": -10.631,
-      "y": 0.514,
-      "z": 2.646,
-      "rotation": 117.54,
+      "position": {
+        "x": -7.9761643,
+        "y": 0.46863472,
+        "z": 5.5689864
+      },
+      "rotation": 138.16466,
       "next_tiles": [
-        "tideglass-pier"
+        "rome-trastevere"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "italy",
+      "price": 240,
+      "rent": 24,
+      "upgrade_cost": 96,
+      "rent_levels": [
+        24,
+        48,
+        86,
+        144,
+        222
+      ]
     },
     {
-      "id": "tideglass-pier",
+      "id": "rome-trastevere",
+      "type": "Property",
+      "display_name": "\u7F85\u99AC\u7279\u62C9\u65AF\u63D0\u5F17\u5217",
       "position_index": 26,
-      "type": "property",
-      "display_name": "Tideglass Pier",
-      "x": -11.312,
-      "y": 0.556,
-      "z": 1.339,
-      "rotation": 106.15,
+      "position": {
+        "x": -9.066055,
+        "y": 0.49606228,
+        "z": 4.593301
+      },
+      "rotation": 131.47311,
       "next_tiles": [
-        "court"
+        "paris-montmartre"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "italy",
+      "price": 225,
+      "rent": 22,
+      "upgrade_cost": 90,
+      "rent_levels": [
+        22,
+        44,
+        79,
+        132,
+        204
+      ]
     },
     {
-      "id": "court",
+      "id": "paris-montmartre",
+      "type": "Property",
+      "display_name": "\u5DF4\u9ECE\u8499\u99AC\u7279\u8857\u5340",
       "position_index": 27,
-      "type": "court",
-      "display_name": "Court",
-      "x": -11.7,
-      "y": 0.958,
-      "z": 0.0,
-      "rotation": 91.38,
+      "position": {
+        "x": -10.009947,
+        "y": 0.7188513,
+        "z": 3.5254161
+      },
+      "rotation": 124.371445,
       "next_tiles": [
-        "northlight-studios"
+        "paris-louvre"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "france",
+      "price": 250,
+      "rent": 25,
+      "upgrade_cost": 100,
+      "rent_levels": [
+        25,
+        50,
+        90,
+        150,
+        232
+      ]
     },
     {
-      "id": "northlight-studios",
+      "id": "paris-louvre",
+      "type": "Property",
+      "display_name": "\u7F85\u6D6E\u5BAE\u82B1\u5712",
       "position_index": 28,
-      "type": "property",
-      "display_name": "Northlight Studios",
-      "x": -11.732,
-      "y": 1.081,
-      "z": -1.339,
-      "rotation": 74.03,
+      "position": {
+        "x": -10.787574,
+        "y": 0.7899674,
+        "z": 2.3885055
+      },
+      "rotation": 116.03174,
       "next_tiles": [
-        "destiny-29"
+        "london-westminster"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "france",
+      "price": 275,
+      "rent": 27,
+      "upgrade_cost": 110,
+      "rent_levels": [
+        27,
+        54,
+        97,
+        162,
+        250
+      ]
     },
     {
-      "id": "destiny-29",
+      "id": "london-westminster",
+      "type": "Property",
+      "display_name": "\u502B\u6566\u897F\u654F\u5BFA\u5340",
       "position_index": 29,
-      "type": "destiny",
-      "display_name": "Destiny · Royal Decree",
-      "x": -11.358,
-      "y": 0.928,
-      "z": -2.646,
-      "rotation": 57.08,
+      "position": {
+        "x": -11.365277,
+        "y": 0.7086871,
+        "z": 1.205701
+      },
+      "rotation": 105.51553,
       "next_tiles": [
-        "crescent-bazaar"
+        "london-prison"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "london",
+      "price": 260,
+      "rent": 26,
+      "upgrade_cost": 104,
+      "rent_levels": [
+        26,
+        52,
+        94,
+        156,
+        240
+      ]
     },
     {
-      "id": "crescent-bazaar",
+      "id": "london-prison",
+      "type": "Prison",
+      "display_name": "\u502B\u6566\u76E3\u7344",
       "position_index": 30,
-      "type": "property",
-      "display_name": "Crescent Bazaar",
-      "x": -10.552,
-      "y": 0.978,
-      "z": -3.89,
-      "rotation": 43.15,
+      "position": {
+        "x": -11.7,
+        "y": 0.7325405,
+        "z": 9.429781E-16
+      },
+      "rotation": 92.21478,
       "next_tiles": [
-        "chance-31"
+        "london-covent-garden"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "chance-31",
+      "id": "london-covent-garden",
+      "type": "Property",
+      "display_name": "\u502B\u6566\u67EF\u82AC\u5712",
       "position_index": 31,
-      "type": "chance",
-      "display_name": "Chance · Crescent Bazaar",
-      "x": -9.326,
-      "y": 0.891,
-      "z": -5.04,
-      "rotation": 32.66,
+      "position": {
+        "x": -11.74663,
+        "y": 0.6793767,
+        "z": -1.205701
+      },
+      "rotation": 76.705605,
       "next_tiles": [
-        "neon-garden"
+        "destiny-open-ticket",
+        "thames-river-cruise"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "london",
+      "price": 280,
+      "rent": 28,
+      "upgrade_cost": 112,
+      "rent_levels": [
+        28,
+        56,
+        101,
+        168,
+        260
+      ]
     },
     {
-      "id": "neon-garden",
+      "id": "destiny-open-ticket",
+      "type": "Destiny",
+      "display_name": "\u547D\u904B\u30FB\u6CF0\u6664\u58EB\u6CB3\u4E4B\u9080",
       "position_index": 32,
-      "type": "property",
-      "display_name": "Neon Garden",
-      "x": -7.731,
-      "y": 0.501,
-      "z": -6.063,
-      "rotation": 24.71,
+      "position": {
+        "x": -11.467149,
+        "y": 0.46372598,
+        "z": -2.3885055
+      },
+      "rotation": 61.10251,
       "next_tiles": [
-        "riverside-rest"
+        "new-york-central-park"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
     },
     {
-      "id": "riverside-rest",
+      "id": "new-york-central-park",
+      "type": "Property",
+      "display_name": "\u7D10\u7D04\u4E2D\u592E\u516C\u5712\u5340",
       "position_index": 33,
-      "type": "special",
-      "display_name": "Riverside Rest",
-      "x": -5.85,
-      "y": 0.445,
-      "z": -6.928,
-      "rotation": 18.24,
+      "position": {
+        "x": -10.839605,
+        "y": 0.4301982,
+        "z": -3.5254161
+      },
+      "rotation": 47.613167,
       "next_tiles": [
-        "aster-foundry"
+        "new-york-broadway"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "united-states",
+      "price": 280,
+      "rent": 28,
+      "upgrade_cost": 112,
+      "rent_levels": [
+        28,
+        56,
+        101,
+        168,
+        260
+      ]
     },
     {
-      "id": "aster-foundry",
+      "id": "new-york-broadway",
+      "type": "Property",
+      "display_name": "\u767E\u8001\u532F\u5287\u9662\u8857",
       "position_index": 34,
-      "type": "property",
-      "display_name": "Aster Foundry",
-      "x": -3.792,
-      "y": 0.674,
-      "z": -7.607,
-      "rotation": 12.34,
+      "position": {
+        "x": -9.864943,
+        "y": 0.5552847,
+        "z": -4.593301
+      },
+      "rotation": 36.999363,
       "next_tiles": [
-        "summit-forum"
+        "rio-carnival"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "united-states",
+      "price": 300,
+      "rent": 30,
+      "upgrade_cost": 120,
+      "rent_levels": [
+        30,
+        60,
+        108,
+        180,
+        278
+      ]
     },
     {
-      "id": "summit-forum",
+      "id": "rio-carnival",
+      "type": "Property",
+      "display_name": "\u91CC\u7D04\u5609\u5E74\u83EF\u5927\u9053",
       "position_index": 35,
-      "type": "property",
-      "display_name": "Summit Forum",
-      "x": -1.668,
-      "y": 0.679,
-      "z": -8.071,
-      "rotation": 6.25,
+      "position": {
+        "x": -8.570134,
+        "y": 0.5630671,
+        "z": -5.5689864
+      },
+      "rotation": 28.831747,
       "next_tiles": [
-        "start"
+        "cape-town-table-mountain"
       ],
-      "branch_tiles": [],
-      "main_route": true,
-      "bounds": {
-        "x": 1.36,
-        "z": 1.12
-      }
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "brazil",
+      "price": 245,
+      "rent": 24,
+      "upgrade_cost": 98,
+      "rent_levels": [
+        24,
+        48,
+        86,
+        144,
+        222
+      ]
     },
     {
-      "id": "scenic-overlook",
-      "type": "branch_waypoint",
-      "display_name": "Island Lookout",
-      "x": 5.4,
-      "y": 0.95,
-      "z": 4.85,
-      "rotation": 0,
+      "id": "cape-town-table-mountain",
+      "type": "Property",
+      "display_name": "\u958B\u666E\u6566\u684C\u5C71\u6B65\u9053",
+      "position_index": 36,
+      "position": {
+        "x": -7.0068746,
+        "y": 0.62472785,
+        "z": -6.429524
+      },
+      "rotation": 22.325958,
       "next_tiles": [
-        "lookout-return"
+        "lisbon-yellow-tram"
       ],
-      "branch_tiles": [],
-      "rejoins_at": "mosaic-plaza",
-      "purpose": "optional scenic route choice; returns to main loop",
-      "main_route": false,
-      "position_index": 36
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "south-africa",
+      "price": 270,
+      "rent": 27,
+      "upgrade_cost": 108,
+      "rent_levels": [
+        27,
+        54,
+        97,
+        162,
+        250
+      ]
     },
     {
-      "id": "lookout-return",
+      "id": "lisbon-yellow-tram",
+      "type": "Property",
+      "display_name": "\u91CC\u65AF\u672C 28 \u865F\u96FB\u8ECA\u8857",
       "position_index": 37,
-      "type": "branch_return",
-      "display_name": "Lookout Return",
-      "x": 6.8,
-      "y": 0.95,
-      "z": 5.5,
-      "rotation": 0,
+      "position": {
+        "x": -5.2459865,
+        "y": 0.8161366,
+        "z": -7.152649
+      },
+      "rotation": 16.743397,
       "next_tiles": [
-        "mosaic-plaza"
+        "airport-jfk"
       ],
-      "branch_tiles": [],
-      "rejoins_at": "mosaic-plaza",
-      "purpose": "rejoin main loop after optional overlook"
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "portugal",
+      "price": 230,
+      "rent": 23,
+      "upgrade_cost": 92,
+      "rent_levels": [
+        23,
+        46,
+        83,
+        138,
+        213
+      ]
+    },
+    {
+      "id": "airport-jfk",
+      "type": "Airport",
+      "display_name": "\u7518\u8FFA\u8FEA\u570B\u969B\u6A5F\u5834",
+      "position_index": 38,
+      "position": {
+        "x": -3.368629,
+        "y": 0.8035266,
+        "z": -7.7174335
+      },
+      "rotation": 11.458523,
+      "next_tiles": [
+        "madrid-retiro-park"
+      ],
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
+    },
+    {
+      "id": "madrid-retiro-park",
+      "type": "Property",
+      "display_name": "\u99AC\u5FB7\u91CC\u9E97\u6C60\u516C\u5712",
+      "position_index": 39,
+      "position": {
+        "x": -1.4560605,
+        "y": 0.63874507,
+        "z": -8.105108
+      },
+      "rotation": 5.9308186,
+      "next_tiles": [
+        "start-singapore"
+      ],
+      "is_main_route": true,
+      "rejoins_at": "",
+      "district": "spain",
+      "price": 235,
+      "rent": 23,
+      "upgrade_cost": 94,
+      "rent_levels": [
+        23,
+        46,
+        83,
+        138,
+        213
+      ]
+    },
+    {
+      "id": "macau-ferry-pier",
+      "type": "Transit",
+      "display_name": "\u6FB3\u9580\u6E21\u8F2A\u78BC\u982D",
+      "position_index": 40,
+      "position": {
+        "x": 10.606382,
+        "y": 0.85,
+        "z": 0.3978961
+      },
+      "rotation": -88.08021,
+      "next_tiles": [
+        "macau-heritage-quarter"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "hong-kong-victoria-peak",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
+    },
+    {
+      "id": "macau-heritage-quarter",
+      "type": "Property",
+      "display_name": "\u6FB3\u9580\u6B77\u53F2\u57CE\u5340",
+      "position_index": 41,
+      "position": {
+        "x": 10.621925,
+        "y": 0.85,
+        "z": 0.86159986
+      },
+      "rotation": -25.211075,
+      "next_tiles": [
+        "hong-kong-victoria-peak"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "hong-kong-victoria-peak",
+      "district": "macau",
+      "price": 180,
+      "rent": 18,
+      "upgrade_cost": 70,
+      "rent_levels": [
+        18,
+        36,
+        65,
+        110,
+        170
+      ]
+    },
+    {
+      "id": "ubud-ridge-rail",
+      "type": "Transit",
+      "display_name": "\u70CF\u5E03\u5C71\u810A\u89C0\u666F\u5217\u8ECA",
+      "position_index": 42,
+      "position": {
+        "x": -0.8393106,
+        "y": 0.85,
+        "z": 7.137876
+      },
+      "rotation": 173.76735,
+      "next_tiles": [
+        "bali-rice-terraces"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "bali-cliff-resort",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
+    },
+    {
+      "id": "bali-rice-terraces",
+      "type": "Property",
+      "display_name": "\u5CC7\u91CC\u5CF6\u68AF\u7530\u6B65\u9053",
+      "position_index": 43,
+      "position": {
+        "x": -1.4341459,
+        "y": 0.85,
+        "z": 7.072913
+      },
+      "rotation": -126.735146,
+      "next_tiles": [
+        "bali-cliff-resort"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "bali-cliff-resort",
+      "district": "bali",
+      "price": 200,
+      "rent": 20,
+      "upgrade_cost": 80,
+      "rent_levels": [
+        20,
+        40,
+        72,
+        120,
+        185
+      ]
+    },
+    {
+      "id": "thames-river-cruise",
+      "type": "Transit",
+      "display_name": "\u6CF0\u6664\u58EB\u6CB3\u904A\u8239",
+      "position_index": 44,
+      "position": {
+        "x": -10.7502985,
+        "y": 0.85,
+        "z": -1.3579575
+      },
+      "rotation": 33.20832,
+      "next_tiles": [
+        "shakespeare-globe"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "destiny-open-ticket",
+      "district": "",
+      "price": 0,
+      "rent": 0,
+      "upgrade_cost": 0,
+      "rent_levels": []
+    },
+    {
+      "id": "shakespeare-globe",
+      "type": "Property",
+      "display_name": "\u838E\u58EB\u6BD4\u4E9E\u74B0\u7403\u5287\u5834",
+      "position_index": 45,
+      "position": {
+        "x": -10.371609,
+        "y": 0.85,
+        "z": -1.6058437
+      },
+      "rotation": 124.82248,
+      "next_tiles": [
+        "london-southbank"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "destiny-open-ticket",
+      "district": "london",
+      "price": 240,
+      "rent": 24,
+      "upgrade_cost": 95,
+      "rent_levels": [
+        24,
+        48,
+        86,
+        145,
+        220
+      ]
+    },
+    {
+      "id": "london-southbank",
+      "type": "Property",
+      "display_name": "\u502B\u6566\u5357\u5CB8\u85DD\u6587\u5340",
+      "position_index": 46,
+      "position": {
+        "x": -10.6105585,
+        "y": 0.85,
+        "z": -1.9493597
+      },
+      "rotation": 152.85727,
+      "next_tiles": [
+        "destiny-open-ticket"
+      ],
+      "is_main_route": false,
+      "rejoins_at": "destiny-open-ticket",
+      "district": "london",
+      "price": 260,
+      "rent": 26,
+      "upgrade_cost": 105,
+      "rent_levels": [
+        26,
+        52,
+        94,
+        158,
+        240
+      ]
     }
   ]
 }

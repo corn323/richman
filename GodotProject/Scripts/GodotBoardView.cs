@@ -1,8 +1,5 @@
-using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Text.Json;
 using Godot;
 using Richman.Core;
 
@@ -13,27 +10,23 @@ namespace Richman.GodotPresentation
         private readonly Dictionary<int, Node3D> _tiles = new Dictionary<int, Node3D>();
         private readonly Dictionary<int, Node3D> _pawns = new Dictionary<int, Node3D>();
         private readonly Dictionary<int, StandardMaterial3D> _tileMaterials = new Dictionary<int, StandardMaterial3D>();
-        private readonly Dictionary<int, Dictionary<string, object>> _metadata = new Dictionary<int, Dictionary<string, object>>();
         private BoardDefinition _board;
 
         public void Build(BoardDefinition board, IReadOnlyList<PlayerState> players)
         {
             _board = board;
-            var root = new Node3D { Name = "ImportedArchipelago" };
+            var root = new Node3D { Name = "ImportedWorldTour" };
             AddChild(root);
             var gltf = new GltfDocument();
             var gltfState = new GltfState();
             var gltfError = gltf.AppendFromFile(ProjectSettings.GlobalizePath("res://Assets/archipelago_map.glb"), gltfState);
-            if (gltfError == Error.Ok)
-            {
-                var model = gltf.GenerateScene(gltfState);
-                if (model == null) throw new InvalidDataException("Godot could not create a scene from archipelago_map.glb.");
-                root.AddChild(model);
-                foreach (var child in model.FindChildren("TileSocket_*", "MeshInstance3D", true, false))
-                    if (child is VisualInstance3D visual) visual.Visible = false;
-            }
-            else throw new InvalidDataException("Godot GLB load failed: " + gltfError);
-            LoadTileData(board);
+            if (gltfError != Error.Ok) throw new InvalidDataException("Godot GLB load failed: " + gltfError);
+            var model = gltf.GenerateScene(gltfState);
+            if (model == null) throw new InvalidDataException("Godot could not create a scene from archipelago_map.glb.");
+            root.AddChild(model);
+            foreach (var child in model.FindChildren("TileSocket_*", "MeshInstance3D", true, false))
+                if (child is VisualInstance3D visual) visual.Visible = false;
+
             for (var i = 0; i < board.TileCount; i++) BuildTile(board.GetTileAt(i));
             for (var i = 0; i < players.Count; i++) BuildPawn(players[i]);
             ValidateRoute();
@@ -41,8 +34,15 @@ namespace Richman.GodotPresentation
 
         public Vector3 GetTilePosition(int tileIndex)
         {
-            var data = _metadata[tileIndex];
-            return new Vector3(Number(data, "x"), Number(data, "y"), Number(data, "z"));
+            var p = _board.GetTileAt(tileIndex).MapPosition;
+            return new Vector3(p.X, p.Y, p.Z);
+        }
+
+        public Vector3 GetTilePosition(string tileId)
+        {
+            var tile = _board.GetTile(tileId);
+            if (tile == null) throw new InvalidDataException("Missing tile id: " + tileId);
+            return GetTilePosition(tile.PositionIndex);
         }
 
         public Node3D GetPawn(int playerId) => _pawns.TryGetValue(playerId, out var pawn) ? pawn : null;
@@ -67,16 +67,16 @@ namespace Richman.GodotPresentation
             }
         }
 
-        public async System.Threading.Tasks.Task AnimatePawn(int playerId, int fromTileIndex, int steps)
+        public async System.Threading.Tasks.Task AnimatePawn(int playerId, IReadOnlyList<int> pathTileIndices)
         {
-            if (!_pawns.TryGetValue(playerId, out var pawn) || _board == null) return;
-            for (var step = 1; step <= steps; step++)
+            if (!_pawns.TryGetValue(playerId, out var pawn) || pathTileIndices == null) return;
+            for (var step = 0; step < pathTileIndices.Count; step++)
             {
-                var targetIndex = (fromTileIndex + step) % _board.TileCount;
-                var target = GetPawnPosition(targetIndex, playerId);
+                var target = GetPawnPosition(pathTileIndices[step], playerId);
                 var tween = CreateTween();
                 tween.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
-                tween.TweenProperty(pawn, "position", target, 0.22f);
+                tween.TweenProperty(pawn, "position", target + Vector3.Up * 0.32f, 0.11f);
+                tween.TweenProperty(pawn, "position", target, 0.11f);
                 await ToSignal(tween, Tween.SignalName.Finished);
             }
         }
@@ -92,166 +92,71 @@ namespace Richman.GodotPresentation
             await ToSignal(tween, Tween.SignalName.Finished);
         }
 
-        public async System.Threading.Tasks.Task AnimateBranch(int playerId, int fromTileIndex)
-        {
-            if (!_metadata.TryGetValue(fromTileIndex, out var source) || !source.TryGetValue("branch_tiles", out var branchValue) || ((List<string>)branchValue).Count == 0) return;
-            var branchId = ((List<string>)branchValue)[0];
-            var mainNextId = ((List<string>)source["next_tiles"])[0];
-            if (!_pawns.TryGetValue(playerId, out var pawn)) return;
-            var visited = new HashSet<string>(StringComparer.Ordinal);
-            while (branchId != mainNextId)
-            {
-                if (!visited.Add(branchId)) throw new InvalidDataException("Branch does not rejoin main route: " + branchId);
-                var branch = FindById(branchId);
-                var target = new Vector3(Number(branch, "x"), Number(branch, "y") + .18f, Number(branch, "z"));
-                var tween = CreateTween(); tween.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut); tween.TweenProperty(pawn, "position", target, .28f);
-                await ToSignal(tween, Tween.SignalName.Finished);
-                branchId = ((List<string>)branch["next_tiles"])[0];
-            }
-            var destination = FindById(mainNextId);
-            pawn.Position = GetPawnPosition(Convert.ToInt32(destination["position_index"], CultureInfo.InvariantCulture), playerId);
-        }
-
-        private Dictionary<string, object> FindById(string id)
-        {
-            foreach (var row in _metadata.Values) if ((string)row["id"] == id) return row;
-            throw new InvalidDataException("Missing map tile id: " + id);
-        }
-
-        private void LoadTileData(BoardDefinition board)
-        {
-            var path = ProjectSettings.GlobalizePath("res://Data/archipelago_tiles.json");
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
-            foreach (var item in document.RootElement.GetProperty("tiles").EnumerateArray())
-            {
-                var index = item.GetProperty("position_index").GetInt32();
-                var values = new Dictionary<string, object>(StringComparer.Ordinal);
-                foreach (var property in item.EnumerateObject())
-                {
-                    if (property.Value.ValueKind == JsonValueKind.String) values[property.Name] = property.Value.GetString();
-                    else if (property.Value.ValueKind == JsonValueKind.Number) values[property.Name] = property.Value.GetSingle();
-                    else if (property.Value.ValueKind == JsonValueKind.Array)
-                    {
-                        var next = new List<string>();
-                        foreach (var v in property.Value.EnumerateArray()) next.Add(v.GetString());
-                        values[property.Name] = next;
-                    }
-                    else if (property.Value.ValueKind == JsonValueKind.True || property.Value.ValueKind == JsonValueKind.False) values[property.Name] = property.Value.GetBoolean();
-                }
-                _metadata.Add(index, values);
-            }
-            if (_metadata.Count < board.TileCount) throw new InvalidDataException("Map tile data must contain every active board tile.");
-            for (var i = 0; i < board.TileCount; i++)
-            {
-                var definition = board.GetTileAt(i);
-                var row = _metadata[i];
-                if (!string.Equals(definition.Id, (string)row["id"], StringComparison.Ordinal))
-                    throw new InvalidDataException("Core/JSON tile id mismatch at " + i + ": " + definition.Id + " != " + row["id"]);
-                if (!string.Equals(JsonType(definition.Type), (string)row["type"], StringComparison.Ordinal))
-                    throw new InvalidDataException("Core/JSON tile type mismatch at " + i + ": " + definition.Type + " != " + row["type"]);
-            }
-        }
-
-        private static string JsonType(BoardTileType type)
-        {
-            switch (type)
-            {
-                case BoardTileType.Start: return "start";
-                case BoardTileType.Property: return "property";
-                case BoardTileType.Tax: return "tax";
-                case BoardTileType.Bonus: return "bonus";
-                case BoardTileType.Rest: return "special";
-                case BoardTileType.Transit: return "transit";
-                case BoardTileType.Special: return "landmark";
-                case BoardTileType.Airport: return "airport";
-                case BoardTileType.Hospital: return "hospital";
-                case BoardTileType.Prison: return "prison";
-                case BoardTileType.Court: return "court";
-                case BoardTileType.Chance: return "chance";
-                case BoardTileType.Destiny: return "destiny";
-                default: throw new InvalidDataException("Unsupported board tile type: " + type);
-            }
-        }
-
         private void BuildTile(BoardTileDefinition definition)
         {
-            var data = _metadata[definition.PositionIndex];
-            var tile = new Node3D { Name = "Tile_" + definition.Id, Position = GetTilePosition(definition.PositionIndex), RotationDegrees = new Vector3(0, Number(data, "rotation"), 0) };
+            var tile = new Node3D
+            {
+                Name = "Tile_" + definition.Id,
+                Position = GetTilePosition(definition.PositionIndex),
+                RotationDegrees = new Vector3(0, definition.MapPosition.RotationDegrees, 0)
+            };
             AddChild(tile);
-            var special = (string)data["type"];
-            var colors = special == "start" ? "#ffe16b" : special == "airport" ? "#ff914d" : special == "prison" ? "#566579" : special == "hospital" ? "#fff4ef" : special == "court" ? "#d7c5aa" : special == "chance" ? "#d79af2" : special == "destiny" ? "#77a8e8" : TileColor(definition, null).ToHtml();
-            var material = Material(new Color(colors));
-            var plate = new MeshInstance3D { Name = "WalkableTile", Mesh = new BoxMesh { Size = new Vector3(1.25f, 0.3f, 1.05f) }, Position = new Vector3(0, -0.05f, 0), MaterialOverride = material };
+            var material = Material(TileColor(definition, null));
+            var plate = new MeshInstance3D
+            {
+                Name = "WalkableTile",
+                Mesh = new BoxMesh { Size = new Vector3(1.25f, 0.3f, 1.05f) },
+                Position = new Vector3(0, -0.05f, 0),
+                MaterialOverride = material
+            };
             tile.AddChild(plate);
             _tileMaterials[definition.PositionIndex] = material;
             _tiles[definition.PositionIndex] = tile;
-            var label = new Label3D
+            tile.AddChild(new Label3D
             {
-                Text = definition.PositionIndex.ToString("00", CultureInfo.InvariantCulture) + "  " + ShortName((string)data["display_name"]),
-                FontSize = 22, PixelSize = 0.0034f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                Text = definition.DisplayName,
+                FontSize = 22, PixelSize = 0.0030f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 Position = new Vector3(0, 0.34f, 0), Modulate = new Color("#182b3b"), NoDepthTest = true
-            };
-            tile.AddChild(label);
-            if (special == "start") AddMarker(tile, "START", new Color("#182b3b"), 0.38f);
-            if (special == "airport") AddMarker(tile, "AIRPORT", new Color("#fff0c4"), 0.20f);
-            if (special == "hospital") AddMarker(tile, "+", new Color("#e94b52"), 0.32f);
-            if (special == "prison") AddMarker(tile, "JAIL", new Color("#fff4d6"), 0.22f);
-            if (special == "court") AddMarker(tile, "§", new Color("#a36d30"), 0.32f);
-            if (special == "chance") AddMarker(tile, "?", new Color("#fff0ff"), 0.32f);
-            if (special == "destiny") AddMarker(tile, "DESTINY", new Color("#f3f8ff"), 0.18f);
+            });
+            var marker = MarkerFor(definition.Type);
+            if (!string.IsNullOrEmpty(marker))
+                tile.AddChild(new Label3D { Text = marker, FontSize = 22, PixelSize = 0.004f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = new Vector3(0, 0.43f, -0.25f), Modulate = new Color("#182b3b"), NoDepthTest = true });
         }
 
-        private void AddMarker(Node3D tile, string text, Color color, float fontSize)
+        private static string MarkerFor(BoardTileType type)
         {
-            tile.AddChild(new Label3D { Text = text, FontSize = (int)(fontSize * 100), PixelSize = 0.006f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = new Vector3(0, 0.42f, -0.23f), Modulate = color, NoDepthTest = true });
+            switch (type)
+            {
+                case BoardTileType.Start: return "出發";
+                case BoardTileType.Airport: return "✈";
+                case BoardTileType.Prison: return "監獄";
+                case BoardTileType.Hospital: return "醫院";
+                case BoardTileType.Court: return "法院";
+                case BoardTileType.Chance: return "機會";
+                case BoardTileType.Destiny: return "命運";
+                case BoardTileType.Transit: return "交通";
+                default: return string.Empty;
+            }
         }
 
         private void ValidateRoute()
         {
-            var id = "start";
-            for (var i = 0; i < _board.TileCount; i++)
+            if (_board.MainRouteTileCount != 40 || _board.TileCount != 47) throw new InvalidDataException("World tour Core data should define 40 main route tiles and 47 total tiles.");
+            for (var i = 0; i < _board.MainRouteTileCount; i++)
             {
-                var row = _metadata[i];
-                if (!string.Equals((string)row["id"], id, StringComparison.Ordinal)) throw new InvalidDataException("Main route order is not contiguous at " + i);
-                id = ((List<string>)row["next_tiles"])[0];
+                var expected = _board.GetTileAt((i + 1) % _board.MainRouteTileCount).Id;
+                if (!_board.GetTileAt(i).NextTileIds.ContainsOrdinal(expected)) throw new InvalidDataException("Main route is not closed at " + _board.GetTileAt(i).Id);
             }
-            if (id != "start") throw new InvalidDataException("Main route does not return to START.");
-            var byId = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
-            foreach (var row in _metadata.Values) byId[(string)row["id"]] = row;
-            foreach (var row in _metadata.Values)
-            {
-                foreach (var next in (List<string>)row["branch_tiles"])
-                {
-                    var branchId = next;
-                    var visited = new HashSet<string>(StringComparer.Ordinal);
-                    var mergeId = ((List<string>)row["next_tiles"])[0];
-                    var merged = false;
-                    while (visited.Add(branchId))
-                    {
-                        if (!byId.TryGetValue(branchId, out var branch)) throw new InvalidDataException("Branch is disconnected: " + branchId);
-                        if (branchId == mergeId) { merged = true; break; }
-                        if (branch.TryGetValue("main_route", out var isMain) && (bool)isMain) break;
-                        branchId = ((List<string>)branch["next_tiles"])[0];
-                    }
-                    if (!merged) throw new InvalidDataException("Branch does not rejoin the declared main route: " + next);
-                }
-            }
-            GD.Print("ARCHIPELAGO_ROUTE_OK main=", _board.TileCount, " branches=", _metadata.Count - _board.TileCount, " closed=start");
-        }
-
-        private static string ShortName(string value)
-        {
-            var separator = value.IndexOf('·');
-            if (separator >= 0 && separator + 1 < value.Length) return value.Substring(separator + 1).Trim();
-            return value.Length > 16 ? value.Substring(0, 14) + "…" : value;
+            GD.Print("WORLD_TOUR_ROUTE_OK main=", _board.MainRouteTileCount, " all=", _board.TileCount, " graph=Core-authoritative");
         }
 
         private void BuildPawn(PlayerState player)
         {
             var pawn = new Node3D { Name = "Pawn_" + player.Id, Position = GetPawnPosition(player.CurrentTileIndex, player.Id) };
-            pawn.AddChild(new MeshInstance3D { Mesh = new CapsuleMesh { Radius = 0.22f, Height = 0.7f }, Position = Vector3.Up * 0.35f, MaterialOverride = Material(PlayerColor(player.Id)) });
-            pawn.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.22f, Height = 0.44f }, Position = Vector3.Up * 0.79f, MaterialOverride = Material(new Color("#ffe0bd")) });
-            pawn.AddChild(new Label3D { Text = "P" + player.Id, FontSize = 28, PixelSize = 0.003f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = Vector3.Up * 1.15f, Modulate = PlayerColor(player.Id) });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnBase", Mesh = new CylinderMesh { TopRadius = 0.27f, BottomRadius = 0.31f, Height = 0.12f, RadialSegments = 10 }, Position = Vector3.Up * 0.08f, MaterialOverride = Material(PlayerColor(player.Id).Darkened(0.18f)) });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnBody", Mesh = new SphereMesh { Radius = 0.22f, Height = 0.68f, RadialSegments = 10, Rings = 6 }, Position = Vector3.Up * 0.42f, MaterialOverride = Material(PlayerColor(player.Id)) });
+            pawn.AddChild(new MeshInstance3D { Name = "PawnCrown", Mesh = new SphereMesh { Radius = 0.16f, Height = 0.28f, RadialSegments = 8, Rings = 4 }, Position = Vector3.Up * 0.76f, MaterialOverride = Material(new Color("#fff0bf")) });
+            pawn.AddChild(new Label3D { Text = "P" + player.Id, FontSize = 26, PixelSize = 0.003f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Position = Vector3.Up * 1.08f, Modulate = PlayerColor(player.Id) });
             AddChild(pawn);
             _pawns[player.Id] = pawn;
         }
@@ -262,23 +167,52 @@ namespace Richman.GodotPresentation
             return GetTilePosition(tileIndex) + offset;
         }
 
-        private static float Number(Dictionary<string, object> data, string key) => Convert.ToSingle(data[key], CultureInfo.InvariantCulture);
-
         private static void UpdatePropertyVisual(Node3D tile, BoardTileDefinition definition, PropertyState property)
         {
             var existing = tile.GetNodeOrNull<Node3D>("Building");
             if (existing != null) existing.QueueFree();
-            if (definition.Type != BoardTileType.Property || property == null || !property.OwnerId.HasValue || property.UpgradeLevel == 0) return;
-            tile.AddChild(new MeshInstance3D { Name = "Building", Position = Vector3.Up * 0.5f, Mesh = new BoxMesh { Size = new Vector3(0.42f, 0.55f, 0.42f) }, MaterialOverride = Material(PlayerColor(property.OwnerId.Value)) });
+            if (definition.Type != BoardTileType.Property || property == null || !property.OwnerId.HasValue || property.UpgradeLevel <= 0) return;
+
+            var level = property.UpgradeLevel;
+            var building = new Node3D { Name = "Building" };
+            var color = PlayerColor(property.OwnerId.Value);
+            var width = level == 1 ? .40f : level == 2 ? .55f : .66f;
+            var height = level == 1 ? .40f : level == 2 ? .65f : .88f;
+            building.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(width, height, width) }, Position = new Vector3(0, .15f + height * .5f, 0), MaterialOverride = Material(new Color("#fff0d3")) });
+            building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { BottomRadius = width * .75f, TopRadius = .04f, Height = .27f, RadialSegments = 6 }, Position = new Vector3(0, .2f + height + .13f, 0), MaterialOverride = Material(color) });
+            if (level >= 3)
+                building.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(width * .72f, .12f, width * .72f) }, Position = new Vector3(0, .2f + height * .58f, 0), MaterialOverride = Material(color.Lightened(.16f)) });
+            if (level >= 4)
+                building.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = .10f, BottomRadius = .18f, Height = .48f, RadialSegments = 8 }, Position = new Vector3(0, .2f + height + .42f, 0), MaterialOverride = Material(new Color("#e5aa4f")) });
+            tile.AddChild(building);
         }
 
         private static Color TileColor(BoardTileDefinition definition, PropertyState property)
         {
             if (property != null && property.OwnerId.HasValue) return PlayerColor(property.OwnerId.Value).Lerp(Colors.White, 0.18f);
-            if (definition.Type == BoardTileType.Start) return new Color("#ffe16b");
-            if (definition.Type != BoardTileType.Property) return new Color("#d6c5a5");
-            var colors = new Dictionary<string, Color> { ["market"] = new Color("#f4c95d"), ["harbor"] = new Color("#76b5d8"), ["industrial"] = new Color("#a7a9ac"), ["residential"] = new Color("#88c999"), ["entertainment"] = new Color("#d58bd7"), ["technology"] = new Color("#8d9ff0"), ["civic"] = new Color("#ef9d76") };
-            return colors.TryGetValue(definition.DistrictId, out var color) ? color : new Color("#c9c9c9");
+            switch (definition.Type)
+            {
+                case BoardTileType.Start: return new Color("#ffe16b");
+                case BoardTileType.Airport: return new Color("#ff914d");
+                case BoardTileType.Prison: return new Color("#566579");
+                case BoardTileType.Hospital: return new Color("#fff4ef");
+                case BoardTileType.Court: return new Color("#d7c5aa");
+                case BoardTileType.Chance: return new Color("#d79af2");
+                case BoardTileType.Destiny: return new Color("#77a8e8");
+                case BoardTileType.Property:
+                    var colors = new Dictionary<string, Color>
+                    {
+                        ["singapore"] = new Color("#70c7b0"), ["japan"] = new Color("#ef9a86"), ["hong-kong"] = new Color("#e9bd5f"),
+                        ["macau"] = new Color("#e9bd5f"), ["korea"] = new Color("#7d9fe0"), ["china"] = new Color("#da665f"),
+                        ["bali"] = new Color("#7ac583"), ["italy"] = new Color("#a5ca78"), ["france"] = new Color("#7ab7da"),
+                        ["london"] = new Color("#df8c6d"), ["united-states"] = new Color("#7897d1"), ["south-america"] = new Color("#c17cbd"),
+                        ["southern-stops"] = new Color("#79b8a7"), ["spain"] = new Color("#e9a958"), ["southeast-asia"] = new Color("#78b978"),
+                        ["silk-road"] = new Color("#d99656")
+                    };
+                    if (colors.TryGetValue(definition.DistrictId, out var districtColor)) return districtColor;
+                    return new Color("#c9c9c9");
+                default: return new Color("#d6c5a5");
+            }
         }
 
         private static Color PlayerColor(int id)

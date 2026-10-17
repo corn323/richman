@@ -69,6 +69,7 @@ namespace Richman.Core
             if (command is RollDiceCommand) return ExecuteRoll(player);
             if (command is BuyPropertyCommand) return ExecuteBuy(player);
             if (command is UpgradePropertyCommand) return ExecuteUpgrade(player);
+            if (command is ChooseRouteCommand chooseRoute) return ExecuteChooseRoute(player, chooseRoute);
             if (command is EndTurnCommand) return ExecuteEndTurn(player);
             return CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
         }
@@ -84,37 +85,74 @@ namespace Richman.Core
 
             State.LastDrawnCard = null;
             State.LastEventMessage = string.Empty;
+            State.MovementStepsRemaining = 0;
+            State.SetRouteChoices(null);
             if (player.DetainedTurnsRemaining > 0)
             {
                 var reason = player.ServeDetainedTurn();
                 State.LastDiceResult = null;
                 State.PendingAction = PendingAction.None;
                 State.Phase = TurnPhase.AwaitingEndTurn;
+                State.MovementStepsRemaining = 0;
                 State.LastEventMessage = reason + " stay: this turn is skipped" + (player.DetainedTurnsRemaining > 0 ? " (" + player.DetainedTurnsRemaining + " turn(s) left)." : ". Released.");
                 return CommandResult.Success();
             }
 
             var dice = _diceRoller.Roll();
             var from = player.CurrentTileIndex;
-            var rawDestination = from + dice.Total;
-            var destination = rawDestination % Board.TileCount;
-            player.MoveTo(destination);
             State.LastDiceResult = dice;
-
-            if (PassedStart(from, dice.Total)) player.AddMoney(Mode.StartBonus);
-
-            ResolveLanding(player, Board.GetTileAt(destination));
-            return CommandResult.Success(dice, from, player.CurrentTileIndex);
+            State.MovementStepsRemaining = dice.Total;
+            var path = new List<int>(dice.Total);
+            ContinueMovement(player, path);
+            if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+            return CommandResult.Success(dice, from, player.CurrentTileIndex, path.AsReadOnly());
         }
 
-        private bool PassedStart(int fromTileIndex, int steps)
+        private CommandResult ExecuteChooseRoute(PlayerState player, ChooseRouteCommand command)
         {
-            for (var step = 1; step <= steps; step++)
-            {
-                if ((fromTileIndex + step) % Board.TileCount == Board.StartPositionIndex) return true;
-            }
+            var turnCheck = ValidateCurrentPlayer(player);
+            if (turnCheck != null) return turnCheck;
+            if (State.Phase != TurnPhase.AwaitingAction || State.PendingAction != PendingAction.ChooseRoute || State.MovementStepsRemaining <= 0)
+                return CommandResult.Failure(CommandErrorCode.InvalidPhase, "There is no route choice waiting.");
+            var legal = false;
+            for (var i = 0; i < State.RouteChoiceTileIds.Count; i++)
+                if (string.Equals(State.RouteChoiceTileIds[i], command.NextTileId, StringComparison.Ordinal)) legal = true;
+            if (!legal) return CommandResult.Failure(CommandErrorCode.InvalidRouteChoice, "The selected route is not connected to this junction.");
 
-            return false;
+            var from = player.CurrentTileIndex;
+            State.SetRouteChoices(null);
+            State.PendingAction = PendingAction.None;
+            var path = new List<int>(State.MovementStepsRemaining);
+            MoveOneStep(player, Board.GetTile(command.NextTileId), path);
+            ContinueMovement(player, path);
+            if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+            return CommandResult.Success(null, from, player.CurrentTileIndex, path.AsReadOnly());
+        }
+
+        private void ContinueMovement(PlayerState player, List<int> path)
+        {
+            while (State.MovementStepsRemaining > 0)
+            {
+                var options = Board.GetNextTiles(player.CurrentTileIndex);
+                if (options.Count > 1)
+                {
+                    State.SetRouteChoices(options);
+                    State.PendingAction = PendingAction.ChooseRoute;
+                    State.Phase = TurnPhase.AwaitingAction;
+                    State.LastEventMessage = "請選擇接下來的旅遊路線。";
+                    return;
+                }
+                MoveOneStep(player, options[0], path);
+            }
+            State.SetRouteChoices(null);
+        }
+
+        private void MoveOneStep(PlayerState player, BoardTileDefinition destination, List<int> path)
+        {
+            player.MoveTo(destination.PositionIndex);
+            State.MovementStepsRemaining--;
+            path.Add(destination.PositionIndex);
+            if (destination.PositionIndex == Board.StartPositionIndex) player.AddMoney(Mode.StartBonus);
         }
 
         private CommandResult ExecuteBuy(PlayerState player)
@@ -141,6 +179,12 @@ namespace Richman.Core
             property.SetOwner(player.Id);
             State.PendingAction = PendingAction.None;
             State.Phase = TurnPhase.AwaitingEndTurn;
+            State.LastEventMessage = "已購買「" + tile.DisplayName + "」。";
+            if (Board.GetDistrictPropertyCount(tile.DistrictId) > 1 && OwnsCompleteDistrict(player.Id, tile.DistrictId) && State.TryMarkDistrictRewardPaid(player.Id, tile.DistrictId))
+            {
+                player.AddMoney(Mode.CompleteDistrictReward);
+                State.LastEventMessage += " 集齊區域，獲得旅遊獎勵 $" + Mode.CompleteDistrictReward + "。";
+            }
             return CommandResult.Success();
         }
 
@@ -179,12 +223,14 @@ namespace Richman.Core
         {
             var turnCheck = ValidateCurrentPlayer(player);
             if (turnCheck != null) return turnCheck;
-            if (State.Phase != TurnPhase.AwaitingAction && State.Phase != TurnPhase.AwaitingEndTurn)
+            if ((State.Phase != TurnPhase.AwaitingAction && State.Phase != TurnPhase.AwaitingEndTurn) || State.PendingAction == PendingAction.ChooseRoute)
             {
                 return CommandResult.Failure(CommandErrorCode.InvalidPhase, "The player has not rolled yet.");
             }
 
             State.PendingAction = PendingAction.None;
+            State.MovementStepsRemaining = 0;
+            State.SetRouteChoices(null);
             AdvanceTurn();
             return CommandResult.Success();
         }
@@ -304,6 +350,8 @@ namespace Richman.Core
             var owner = State.GetPlayer(property.OwnerId.Value);
             if (owner == null || owner.Status != PlayerStatus.Active) throw new InvalidOperationException("A property owner must be active.");
             var rent = tile.GetRent(property.UpgradeLevel);
+            if (Board.GetDistrictPropertyCount(tile.DistrictId) > 1 && OwnsCompleteDistrict(owner.Id, tile.DistrictId))
+                rent = (rent * (100 + Mode.CompleteDistrictRentBonusPercent) + 99) / 100;
             if (player.Money >= rent)
             {
                 player.Spend(rent);
@@ -329,6 +377,20 @@ namespace Richman.Core
 
             player.TakeAllMoney();
             DeclareBankruptcy(player, null);
+        }
+
+        private bool OwnsCompleteDistrict(int playerId, string districtId)
+        {
+            var count = 0;
+            for (var i = 0; i < Board.TileCount; i++)
+            {
+                var tile = Board.GetTileAt(i);
+                if (tile.Type != BoardTileType.Property || !string.Equals(tile.DistrictId, districtId, StringComparison.Ordinal)) continue;
+                count++;
+                var property = State.GetProperty(tile.Id);
+                if (property == null || property.OwnerId != playerId) return false;
+            }
+            return count > 1;
         }
 
         private void DeclareBankruptcy(PlayerState player, int? creditorId)
@@ -362,6 +424,11 @@ namespace Richman.Core
             if (State.Phase == TurnPhase.Finished) return;
             CheckVictory();
             if (State.Phase == TurnPhase.Finished) return;
+            if (State.TurnNumber >= Mode.TurnLimit)
+            {
+                FinishByNetWorth();
+                return;
+            }
 
             var currentIndex = -1;
             for (var i = 0; i < State.Players.Count; i++)
@@ -405,9 +472,40 @@ namespace Richman.Core
             if (activeCount != 1) return;
             lastActive.MarkWinner();
             State.CurrentPlayerId = lastActive.Id;
-            State.Outcome = new GameOutcome(lastActive.Id, State.TurnNumber);
+            State.Outcome = new GameOutcome(lastActive.Id, State.TurnNumber, VictoryReason.LastPlayerStanding);
             State.Phase = TurnPhase.Finished;
             State.PendingAction = PendingAction.None;
+        }
+
+        private void FinishByNetWorth()
+        {
+            PlayerState winner = null;
+            long bestWorth = long.MinValue;
+            for (var i = 0; i < State.Players.Count; i++)
+            {
+                var player = State.Players[i];
+                if (player.Status != PlayerStatus.Active) continue;
+                long worth = player.Money;
+                for (var propertyIndex = 0; propertyIndex < State.Properties.Count; propertyIndex++)
+                {
+                    var property = State.Properties[propertyIndex];
+                    if (property.OwnerId != player.Id) continue;
+                    var tile = Board.GetProperty(property.PropertyId);
+                    worth += tile.PurchasePrice / 2L + (long)tile.UpgradeCost * property.UpgradeLevel / 2L;
+                }
+                if (winner == null || worth > bestWorth || (worth == bestWorth && player.Money > winner.Money))
+                {
+                    winner = player;
+                    bestWorth = worth;
+                }
+            }
+            if (winner == null) throw new InvalidOperationException("No active player remains at the turn limit.");
+            winner.MarkWinner();
+            State.CurrentPlayerId = winner.Id;
+            State.Outcome = new GameOutcome(winner.Id, State.TurnNumber, VictoryReason.HighestNetWorthAtTurnLimit);
+            State.Phase = TurnPhase.Finished;
+            State.PendingAction = PendingAction.None;
+            State.LastEventMessage = "旅程結算：依現金與資產淨值選出優勝者。";
         }
     }
 

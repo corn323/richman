@@ -4,6 +4,16 @@ using System.Collections.ObjectModel;
 
 namespace Richman.Core
 {
+    public readonly struct BoardMapPosition
+    {
+        public BoardMapPosition(float x, float y, float z, float rotationDegrees)
+        { X = x; Y = y; Z = z; RotationDegrees = rotationDegrees; }
+        public float X { get; }
+        public float Y { get; }
+        public float Z { get; }
+        public float RotationDegrees { get; }
+    }
+
     public enum BoardTileType
     {
         Start,
@@ -25,6 +35,8 @@ namespace Richman.Core
     {
         private readonly int[] _rentLevels;
         private readonly ReadOnlyCollection<int> _rentLevelsView;
+        private string[] _nextTileIds;
+        private ReadOnlyCollection<string> _nextTileIdsView;
 
         public BoardTileDefinition(
             string id,
@@ -37,7 +49,10 @@ namespace Richman.Core
             IEnumerable<int> rentLevels,
             string districtId,
             string visualId,
-            int effectAmount = 0)
+            int effectAmount = 0,
+            IEnumerable<string> nextTileIds = null,
+            bool isMainRoute = true,
+            string rejoinsAtId = null)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Tile id is required.", nameof(id));
             if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("Display name is required.", nameof(displayName));
@@ -57,6 +72,10 @@ namespace Richman.Core
             VisualId = visualId ?? string.Empty;
             EffectAmount = effectAmount;
             _rentLevels = rentLevels == null ? Array.Empty<int>() : new List<int>(rentLevels).ToArray();
+            _nextTileIds = nextTileIds == null ? Array.Empty<string>() : new List<string>(nextTileIds).ToArray();
+            _nextTileIdsView = Array.AsReadOnly(_nextTileIds);
+            IsMainRoute = isMainRoute;
+            RejoinsAtId = rejoinsAtId ?? string.Empty;
 
             if (type == BoardTileType.Property)
             {
@@ -86,6 +105,10 @@ namespace Richman.Core
         public string DistrictId { get; }
         public string VisualId { get; }
         public int EffectAmount { get; }
+        public IReadOnlyList<string> NextTileIds => _nextTileIdsView;
+        public bool IsMainRoute { get; }
+        public string RejoinsAtId { get; }
+        public BoardMapPosition MapPosition { get; private set; }
 
         public int GetRent(int upgradeLevel)
         {
@@ -93,12 +116,22 @@ namespace Richman.Core
             if (upgradeLevel < 0 || upgradeLevel >= _rentLevels.Length) throw new ArgumentOutOfRangeException(nameof(upgradeLevel));
             return _rentLevels[upgradeLevel];
         }
+
+        internal void SetNextTileIds(IEnumerable<string> nextTileIds)
+        {
+            _nextTileIds = new List<string>(nextTileIds).ToArray();
+            _nextTileIdsView = Array.AsReadOnly(_nextTileIds);
+        }
+
+        internal void SetMapPosition(BoardMapPosition position) => MapPosition = position;
     }
 
     public sealed class BoardDefinition
     {
         private readonly List<BoardTileDefinition> _tiles;
         private readonly ReadOnlyCollection<BoardTileDefinition> _tilesView;
+        private readonly Dictionary<string, BoardTileDefinition> _tilesById;
+        private readonly int _mainRouteTileCount;
 
         public BoardDefinition(IEnumerable<BoardTileDefinition> tiles)
         {
@@ -107,6 +140,7 @@ namespace Richman.Core
             if (_tiles.Count < 2) throw new ArgumentException("A board needs at least two tiles.", nameof(tiles));
 
             var ids = new HashSet<string>(StringComparer.Ordinal);
+            _tilesById = new Dictionary<string, BoardTileDefinition>(StringComparer.Ordinal);
             var startCount = 0;
             var startPositionIndex = -1;
             for (var i = 0; i < _tiles.Count; i++)
@@ -114,6 +148,8 @@ namespace Richman.Core
                 var tile = _tiles[i] ?? throw new ArgumentException("Board tiles cannot be null.", nameof(tiles));
                 if (!ids.Add(tile.Id)) throw new ArgumentException("Board tile ids must be unique.", nameof(tiles));
                 if (tile.PositionIndex != i) throw new ArgumentException("Tile position indexes must be contiguous and match list order.", nameof(tiles));
+                _tilesById.Add(tile.Id, tile);
+                if (tile.IsMainRoute) _mainRouteTileCount++;
                 if (tile.Type == BoardTileType.Start)
                 {
                     startCount++;
@@ -123,11 +159,39 @@ namespace Richman.Core
 
             if (startCount != 1) throw new ArgumentException("A board must have exactly one Start tile.", nameof(tiles));
 
+            for (var i = 0; i < _mainRouteTileCount; i++)
+            {
+                if (!_tiles[i].IsMainRoute) throw new ArgumentException("Main route tiles must occupy the first contiguous position indexes.", nameof(tiles));
+            }
+            for (var i = 0; i < _mainRouteTileCount; i++)
+            {
+                if (_tiles[i].NextTileIds.Count == 0)
+                    _tiles[i].SetNextTileIds(new[] { _tiles[(i + 1) % _mainRouteTileCount].Id });
+            }
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                var tile = _tiles[i];
+                if (tile.NextTileIds.Count == 0) throw new ArgumentException("Every tile must connect to at least one next tile: " + tile.Id, nameof(tiles));
+                for (var edge = 0; edge < tile.NextTileIds.Count; edge++)
+                {
+                    if (!_tilesById.ContainsKey(tile.NextTileIds[edge])) throw new ArgumentException("Tile connection points to a missing id: " + tile.Id + " -> " + tile.NextTileIds[edge], nameof(tiles));
+                }
+                if (!tile.IsMainRoute && string.IsNullOrWhiteSpace(tile.RejoinsAtId)) throw new ArgumentException("A branch tile must declare its rejoin id: " + tile.Id, nameof(tiles));
+            }
+            for (var i = 0; i < _mainRouteTileCount; i++)
+            {
+                var expectedNext = _tiles[(i + 1) % _mainRouteTileCount].Id;
+                if (!_tiles[i].NextTileIds.ContainsOrdinal(expectedNext)) throw new ArgumentException("Main route does not form one closed loop at " + _tiles[i].Id, nameof(tiles));
+            }
+            ValidateBranchRejoins();
+            AssignMapPositions();
+
             StartPositionIndex = startPositionIndex;
             _tilesView = _tiles.AsReadOnly();
         }
 
         public int TileCount => _tiles.Count;
+        public int MainRouteTileCount => _mainRouteTileCount;
         public int StartPositionIndex { get; }
         public IReadOnlyList<BoardTileDefinition> Tiles => _tilesView;
 
@@ -135,6 +199,104 @@ namespace Richman.Core
         {
             if (positionIndex < 0 || positionIndex >= _tiles.Count) throw new ArgumentOutOfRangeException(nameof(positionIndex));
             return _tiles[positionIndex];
+        }
+
+        public BoardTileDefinition GetTile(string id) => id != null && _tilesById.TryGetValue(id, out var tile) ? tile : null;
+
+        public IReadOnlyList<BoardTileDefinition> GetNextTiles(int positionIndex)
+        {
+            var source = GetTileAt(positionIndex);
+            var next = new List<BoardTileDefinition>(source.NextTileIds.Count);
+            for (var i = 0; i < source.NextTileIds.Count; i++) next.Add(_tilesById[source.NextTileIds[i]]);
+            return next.AsReadOnly();
+        }
+
+        public int GetDistrictPropertyCount(string districtId)
+        {
+            var count = 0;
+            for (var i = 0; i < _tiles.Count; i++)
+                if (_tiles[i].Type == BoardTileType.Property && string.Equals(_tiles[i].DistrictId, districtId, StringComparison.Ordinal)) count++;
+            return count;
+        }
+
+        private void ValidateBranchRejoins()
+        {
+            for (var i = _mainRouteTileCount; i < _tiles.Count; i++)
+            {
+                var branch = _tiles[i];
+                if (!_tilesById.TryGetValue(branch.RejoinsAtId, out var merge) || !merge.IsMainRoute)
+                    throw new ArgumentException("Branch rejoin must name a main route tile: " + branch.Id, nameof(_tiles));
+                var pending = new Queue<string>();
+                var visited = new HashSet<string>(StringComparer.Ordinal);
+                pending.Enqueue(branch.Id);
+                var reachesMerge = false;
+                while (pending.Count > 0)
+                {
+                    var id = pending.Dequeue();
+                    if (!visited.Add(id)) continue;
+                    if (id == merge.Id) { reachesMerge = true; continue; }
+                    var tile = _tilesById[id];
+                    for (var edge = 0; edge < tile.NextTileIds.Count; edge++) pending.Enqueue(tile.NextTileIds[edge]);
+                }
+                if (!reachesMerge) throw new ArgumentException("Branch cannot reach its declared rejoin: " + branch.Id, nameof(_tiles));
+            }
+        }
+
+        private void AssignMapPositions()
+        {
+            for (var i = 0; i < _mainRouteTileCount; i++)
+            {
+                var angle = (Math.PI * 2.0 * i / _mainRouteTileCount) - (Math.PI / 2.0);
+                var x = (float)(11.7 * Math.Cos(angle) + 0.42 * Math.Sin(3.0 * angle));
+                var z = (float)(8.3 * Math.Sin(angle) + 0.30 * Math.Sin(2.0 * angle));
+                var y = (float)(0.62 + 0.16 * Math.Sin(i * 0.71) + 0.07 * Math.Sin(i * 1.89));
+                _tiles[i].SetMapPosition(new BoardMapPosition(x, y, z, 0f));
+            }
+
+            for (var sourceIndex = 0; sourceIndex < _mainRouteTileCount; sourceIndex++)
+            {
+                var source = _tiles[sourceIndex];
+                for (var edge = 0; edge < source.NextTileIds.Count; edge++)
+                {
+                    var branchId = source.NextTileIds[edge];
+                    var branch = _tilesById[branchId];
+                    if (branch.IsMainRoute) continue;
+                    var branchNodes = new List<BoardTileDefinition>();
+                    var visited = new HashSet<string>(StringComparer.Ordinal);
+                    var current = branch;
+                    while (!current.IsMainRoute)
+                    {
+                        if (!visited.Add(current.Id)) throw new ArgumentException("Branch contains a cycle before merging: " + current.Id);
+                        branchNodes.Add(current);
+                        if (current.NextTileIds.Count != 1) throw new ArgumentException("Each branch waypoint must have one onward route: " + current.Id);
+                        current = _tilesById[current.NextTileIds[0]];
+                    }
+                    var end = current.MapPosition;
+                    var start = source.MapPosition;
+                    var midX = (start.X + end.X) * 0.5f;
+                    var midZ = (start.Z + end.Z) * 0.5f;
+                    var length = MathF.Sqrt(midX * midX + midZ * midZ);
+                    var controlX = midX - (length > 0.001f ? midX / length * 2.5f : 0f);
+                    var controlZ = midZ - (length > 0.001f ? midZ / length * 2.5f : 0f);
+                    for (var waypoint = 0; waypoint < branchNodes.Count; waypoint++)
+                    {
+                        var t = (waypoint + 1f) / (branchNodes.Count + 1f);
+                        var inverse = 1f - t;
+                        var x = inverse * inverse * start.X + 2f * inverse * t * controlX + t * t * end.X;
+                        var z = inverse * inverse * start.Z + 2f * inverse * t * controlZ + t * t * end.Z;
+                        branchNodes[waypoint].SetMapPosition(new BoardMapPosition(x, 0.85f, z, 0f));
+                    }
+                }
+            }
+
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                var tile = _tiles[i];
+                var next = _tilesById[tile.NextTileIds[0]].MapPosition;
+                var position = tile.MapPosition;
+                var rotation = (float)(-Math.Atan2(next.Z - position.Z, next.X - position.X) * 180.0 / Math.PI);
+                tile.SetMapPosition(new BoardMapPosition(position.X, position.Y, position.Z, rotation));
+            }
         }
 
         public BoardTileDefinition GetProperty(string propertyId)
@@ -148,64 +310,115 @@ namespace Richman.Core
         }
     }
 
+    internal static class BoardStringExtensions
+    {
+        public static bool ContainsOrdinal(this IReadOnlyList<string> values, string value)
+        {
+            for (var i = 0; i < values.Count; i++) if (string.Equals(values[i], value, StringComparison.Ordinal)) return true;
+            return false;
+        }
+    }
+
     public static class PrototypeBoardFactory
     {
+        private const int MainRouteCount = 40;
+
         public static BoardDefinition Create()
         {
             var tiles = new List<BoardTileDefinition>();
-            tiles.Add(Simple(tiles, "start", BoardTileType.Start, "Central Station"));
-            tiles.Add(Property(tiles, "tokyo", "Tokyo", "technology", 120, 12, 60, 12, 30, 60, 100));
-            tiles.Add(Effect(tiles, "chance-2", BoardTileType.Chance, "Chance · Festival", 0));
-            tiles.Add(Property(tiles, "canal-row", "Canal Row", "harbor", 140, 14, 70, 14, 35, 70, 115));
-            tiles.Add(Effect(tiles, "destiny-4", BoardTileType.Destiny, "Destiny · Sky Tram", 0));
-            tiles.Add(Simple(tiles, "airport-1", BoardTileType.Airport, "Airport · Air Route"));
-            tiles.Add(Property(tiles, "copper-workshop", "Copper Workshop", "industrial", 160, 16, 80, 16, 40, 80, 130));
-            tiles.Add(Effect(tiles, "city-maintenance", BoardTileType.Tax, "City Maintenance", -100));
-            tiles.Add(Property(tiles, "sunset-apartments", "Sunset Apartments", "residential", 180, 18, 90, 18, 45, 90, 145));
-            tiles.Add(Simple(tiles, "old-clock-tower", BoardTileType.Special, "Old Clock Tower"));
-            tiles.Add(Property(tiles, "pixel-arcade", "Pixel Arcade", "entertainment", 200, 20, 100, 20, 50, 100, 160));
-            tiles.Add(Effect(tiles, "chance-11", BoardTileType.Chance, "Chance · Street Fair", 0));
-            tiles.Add(Property(tiles, "skyline-lab", "Skyline Lab", "technology", 220, 22, 110, 22, 55, 110, 175));
-            tiles.Add(Effect(tiles, "hospital", BoardTileType.Hospital, "Hospital", 1));
-            tiles.Add(Property(tiles, "harbor-exchange", "Harbor Exchange", "harbor", 240, 24, 120, 24, 60, 120, 190));
-            tiles.Add(Simple(tiles, "ferry-terminal", BoardTileType.Transit, "Ferry Terminal"));
-            tiles.Add(Property(tiles, "bamboo-court", "Bamboo Court", "residential", 260, 26, 130, 26, 65, 130, 205));
-            tiles.Add(Effect(tiles, "destiny-17", BoardTileType.Destiny, "Destiny · Transit", 0));
-            tiles.Add(Property(tiles, "mosaic-plaza", "Mosaic Plaza", "market", 280, 28, 140, 28, 70, 140, 220));
-            tiles.Add(Simple(tiles, "observation-deck", BoardTileType.Special, "Observation Deck"));
-            tiles.Add(Property(tiles, "rainy-day-theater", "Rainy Day Theater", "entertainment", 300, 30, 150, 30, 75, 150, 235));
-            tiles.Add(Effect(tiles, "chance-21", BoardTileType.Chance, "Chance · Public Art", 0));
-            tiles.Add(Property(tiles, "foundry-lane", "Foundry Lane", "industrial", 320, 32, 160, 32, 80, 160, 250));
-            tiles.Add(Effect(tiles, "prison", BoardTileType.Prison, "Prison", 2));
-            tiles.Add(Property(tiles, "solaris-heights", "Solaris Heights", "residential", 340, 34, 170, 34, 85, 170, 265));
-            tiles.Add(Simple(tiles, "airport-2", BoardTileType.Airport, "Airport · Island Hopper"));
-            tiles.Add(Property(tiles, "tideglass-pier", "Tideglass Pier", "harbor", 360, 36, 180, 36, 90, 180, 280));
-            tiles.Add(Effect(tiles, "court", BoardTileType.Court, "Court", 150));
-            tiles.Add(Property(tiles, "northlight-studios", "Northlight Studios", "technology", 380, 38, 190, 38, 95, 190, 295));
-            tiles.Add(Effect(tiles, "destiny-29", BoardTileType.Destiny, "Destiny · Royal Decree", 0));
-            tiles.Add(Property(tiles, "crescent-bazaar", "Crescent Bazaar", "market", 400, 40, 200, 40, 100, 200, 310));
-            tiles.Add(Effect(tiles, "chance-31", BoardTileType.Chance, "Chance · Crescent Bazaar", 0));
-            tiles.Add(Property(tiles, "neon-garden", "Neon Garden", "entertainment", 420, 42, 210, 42, 105, 210, 325));
-            tiles.Add(Simple(tiles, "riverside-rest", BoardTileType.Rest, "Riverside Rest"));
-            tiles.Add(Property(tiles, "aster-foundry", "Aster Foundry", "industrial", 440, 44, 220, 44, 110, 220, 340));
-            tiles.Add(Property(tiles, "summit-forum", "Summit Forum", "civic", 500, 50, 250, 50, 125, 250, 390));
+            var ids = new[]
+            {
+                "start-singapore", "singapore-gardens", "singapore-marina", "airport-changi", "chance-global-fair",
+                "kyoto-gion", "kyoto-teahouse", "destiny-wayfinder", "osaka-dotonbori", "shinkansen-terminal",
+                "hong-kong-star-ferry", "hong-kong-victoria-peak", "hong-kong-harbor-dues", "seoul-insadong", "seoul-gyeongbokgung",
+                "airport-incheon", "shanghai-bund", "shanghai-yu-garden", "chance-night-market", "bangkok-floating-market",
+                "bali-ubud-terraces", "bali-cliff-resort", "mumbai-crawford-market", "dubai-creek", "airport-dubai",
+                "rome-colosseum", "rome-trastevere", "paris-montmartre", "paris-louvre", "london-westminster",
+                "london-prison", "london-covent-garden", "destiny-open-ticket", "new-york-central-park", "new-york-broadway",
+                "rio-carnival", "cape-town-table-mountain", "lisbon-yellow-tram", "airport-jfk", "madrid-retiro-park"
+            };
+
+            for (var i = 0; i < MainRouteCount; i++)
+            {
+                var next = new List<string> { ids[(i + 1) % MainRouteCount] };
+                if (i == 10) next.Add("macau-ferry-pier");
+                if (i == 20) next.Add("ubud-ridge-rail");
+                if (i == 31) next.Add("thames-river-cruise");
+                tiles.Add(CreateMainTile(i, ids[i], next.ToArray()));
+            }
+
+            tiles.Add(Simple(40, "macau-ferry-pier", BoardTileType.Transit, "澳門渡輪碼頭", new[] { "macau-heritage-quarter" }, false, "hong-kong-victoria-peak"));
+            tiles.Add(Property(41, "macau-heritage-quarter", "澳門歷史城區", "macau", 180, 18, 70, new[] { 18, 36, 65, 110, 170 }, new[] { "hong-kong-victoria-peak" }, false, "hong-kong-victoria-peak"));
+            tiles.Add(Simple(42, "ubud-ridge-rail", BoardTileType.Transit, "烏布山脊觀景列車", new[] { "bali-rice-terraces" }, false, "bali-cliff-resort"));
+            tiles.Add(Property(43, "bali-rice-terraces", "峇里島梯田步道", "bali", 200, 20, 80, new[] { 20, 40, 72, 120, 185 }, new[] { "bali-cliff-resort" }, false, "bali-cliff-resort"));
+            tiles.Add(Simple(44, "thames-river-cruise", BoardTileType.Transit, "泰晤士河遊船", new[] { "shakespeare-globe" }, false, "destiny-open-ticket"));
+            tiles.Add(Property(45, "shakespeare-globe", "莎士比亞環球劇場", "london", 240, 24, 95, new[] { 24, 48, 86, 145, 220 }, new[] { "london-southbank" }, false, "destiny-open-ticket"));
+            tiles.Add(Property(46, "london-southbank", "倫敦南岸藝文區", "london", 260, 26, 105, new[] { 26, 52, 94, 158, 240 }, new[] { "destiny-open-ticket" }, false, "destiny-open-ticket"));
 
             return new BoardDefinition(tiles);
         }
 
-        private static BoardTileDefinition Simple(List<BoardTileDefinition> tiles, string id, BoardTileType type, string name)
+        private static BoardTileDefinition CreateMainTile(int index, string id, string[] next)
         {
-            return new BoardTileDefinition(id, type, name, tiles.Count, 0, 0, 0, null, string.Empty, id);
+            switch (index)
+            {
+                case 0: return Simple(index, id, BoardTileType.Start, "起點・新加坡", next);
+                case 1: return Property(index, id, "濱海灣花園", "singapore", 140, 14, 55, new[] { 14, 28, 50, 84, 130 }, next);
+                case 2: return Property(index, id, "濱海灣金沙步道", "singapore", 160, 16, 65, new[] { 16, 32, 58, 98, 150 }, next);
+                case 3: return Simple(index, id, BoardTileType.Airport, "樟宜國際機場", next);
+                case 4: return Simple(index, id, BoardTileType.Chance, "機會・世界博覽會", next);
+                case 5: return Property(index, id, "京都祇園町家", "japan", 150, 15, 60, new[] { 15, 30, 54, 90, 140 }, next);
+                case 6: return Property(index, id, "京都茶屋小徑", "japan", 170, 17, 68, new[] { 17, 34, 61, 102, 158 }, next);
+                case 7: return Simple(index, id, BoardTileType.Destiny, "命運・開放旅券", next);
+                case 8: return Property(index, id, "大阪道頓堀商店街", "japan", 190, 19, 76, new[] { 19, 38, 68, 114, 176 }, next);
+                case 9: return Simple(index, id, BoardTileType.Transit, "東海道新幹線站", next);
+                case 10: return Simple(index, id, BoardTileType.Special, "香港天星小輪碼頭", next);
+                case 11: return Property(index, id, "香港太平山頂", "hong-kong", 210, 21, 84, new[] { 21, 42, 76, 126, 195 }, next);
+                case 12: return Effect(index, id, BoardTileType.Tax, "香港港口通行費", 90, next);
+                case 13: return Property(index, id, "首爾仁寺洞", "korea", 180, 18, 72, new[] { 18, 36, 65, 108, 168 }, next);
+                case 14: return Property(index, id, "景福宮文化街區", "korea", 205, 20, 82, new[] { 20, 40, 72, 120, 185 }, next);
+                case 15: return Simple(index, id, BoardTileType.Airport, "仁川國際機場", next);
+                case 16: return Property(index, id, "上海外灘", "china", 220, 22, 88, new[] { 22, 44, 79, 132, 204 }, next);
+                case 17: return Property(index, id, "上海豫園", "china", 200, 20, 80, new[] { 20, 40, 72, 120, 185 }, next);
+                case 18: return Simple(index, id, BoardTileType.Chance, "機會・夜市奇遇", next);
+                case 19: return Property(index, id, "曼谷水上市場", "thailand", 190, 19, 76, new[] { 19, 38, 68, 114, 176 }, next);
+                case 20: return Property(index, id, "峇里島烏布梯田", "bali", 180, 18, 72, new[] { 18, 36, 65, 108, 168 }, next);
+                case 21: return Property(index, id, "峇里島海崖度假村", "bali", 215, 21, 86, new[] { 21, 42, 76, 126, 195 }, next);
+                case 22: return Property(index, id, "孟買克勞福市場", "india", 210, 21, 84, new[] { 21, 42, 76, 126, 195 }, next);
+                case 23: return Property(index, id, "杜拜河畔市集", "uae", 230, 23, 92, new[] { 23, 46, 83, 138, 213 }, next);
+                case 24: return Simple(index, id, BoardTileType.Airport, "杜拜國際機場", next);
+                case 25: return Property(index, id, "羅馬競技場廣場", "italy", 240, 24, 96, new[] { 24, 48, 86, 144, 222 }, next);
+                case 26: return Property(index, id, "羅馬特拉斯提弗列", "italy", 225, 22, 90, new[] { 22, 44, 79, 132, 204 }, next);
+                case 27: return Property(index, id, "巴黎蒙馬特街區", "france", 250, 25, 100, new[] { 25, 50, 90, 150, 232 }, next);
+                case 28: return Property(index, id, "羅浮宮花園", "france", 275, 27, 110, new[] { 27, 54, 97, 162, 250 }, next);
+                case 29: return Property(index, id, "倫敦西敏寺區", "london", 260, 26, 104, new[] { 26, 52, 94, 156, 240 }, next);
+                case 30: return Effect(index, id, BoardTileType.Prison, "倫敦監獄", 1, next);
+                case 31: return Property(index, id, "倫敦柯芬園", "london", 280, 28, 112, new[] { 28, 56, 101, 168, 260 }, next);
+                case 32: return Simple(index, id, BoardTileType.Destiny, "命運・泰晤士河之邀", next);
+                case 33: return Property(index, id, "紐約中央公園區", "united-states", 280, 28, 112, new[] { 28, 56, 101, 168, 260 }, next);
+                case 34: return Property(index, id, "百老匯劇院街", "united-states", 300, 30, 120, new[] { 30, 60, 108, 180, 278 }, next);
+                case 35: return Property(index, id, "里約嘉年華大道", "brazil", 245, 24, 98, new[] { 24, 48, 86, 144, 222 }, next);
+                case 36: return Property(index, id, "開普敦桌山步道", "south-africa", 270, 27, 108, new[] { 27, 54, 97, 162, 250 }, next);
+                case 37: return Property(index, id, "里斯本 28 號電車街", "portugal", 230, 23, 92, new[] { 23, 46, 83, 138, 213 }, next);
+                case 38: return Simple(index, id, BoardTileType.Airport, "甘迺迪國際機場", next);
+                case 39: return Property(index, id, "馬德里麗池公園", "spain", 235, 23, 94, new[] { 23, 46, 83, 138, 213 }, next);
+                default: throw new ArgumentOutOfRangeException(nameof(index));
+            }
         }
 
-        private static BoardTileDefinition Effect(List<BoardTileDefinition> tiles, string id, BoardTileType type, string name, int amount)
+        private static BoardTileDefinition Simple(int index, string id, BoardTileType type, string name, IEnumerable<string> next, bool mainRoute = true, string rejoinsAt = null)
         {
-            return new BoardTileDefinition(id, type, name, tiles.Count, 0, 0, 0, null, string.Empty, id, amount);
+            return new BoardTileDefinition(id, type, name, index, 0, 0, 0, null, string.Empty, id, type == BoardTileType.Prison ? 1 : 0, next, mainRoute, rejoinsAt);
         }
 
-        private static BoardTileDefinition Property(List<BoardTileDefinition> tiles, string id, string name, string district, int price, int baseRent, int upgradeCost, params int[] rents)
+        private static BoardTileDefinition Effect(int index, string id, BoardTileType type, string name, int amount, IEnumerable<string> next)
         {
-            return new BoardTileDefinition(id, BoardTileType.Property, name, tiles.Count, price, baseRent, upgradeCost, rents, district, id);
+            return new BoardTileDefinition(id, type, name, index, 0, 0, 0, null, string.Empty, id, amount, next);
+        }
+
+        private static BoardTileDefinition Property(int index, string id, string name, string district, int price, int rent, int upgradeCost, int[] rents, IEnumerable<string> next, bool mainRoute = true, string rejoinsAt = null)
+        {
+            return new BoardTileDefinition(id, BoardTileType.Property, name, index, price, rent, upgradeCost, rents, district, id, 0, next, mainRoute, rejoinsAt);
         }
     }
 }
