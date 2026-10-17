@@ -16,6 +16,7 @@ GodotProject/export_templates/
 !Richman.Core.Standalone.csproj
 !Assets/Scripts/Core/Tests/Richman.Core.Tests.csproj
 *.sln
+!GodotProject/Richman.sln
 *.suo
 *.user
 *.userprefs
