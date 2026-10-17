@@ -92,7 +92,7 @@ jobs:
         shell: pwsh
         run: |
           & $env:GODOT_EXE --headless --editor --path GodotProject --import --quit
-          if ($LASTEXITCODE -ne 0) { throw "Godot resource import failed with exit code $LASTEXITCODE." }
+          if ($LASTEXITCODE) { throw "Godot resource import failed with exit code $LASTEXITCODE." }
 
       - name: Build Godot C# solution
         run: dotnet build GodotProject/Richman.Godot.csproj --configuration Release
@@ -101,14 +101,14 @@ jobs:
         shell: pwsh
         run: |
           & $env:GODOT_EXE --headless --editor --path GodotProject --build-solutions --quit
-          if ($LASTEXITCODE -ne 0) { throw "Godot C# solution build failed with exit code $LASTEXITCODE." }
+          if ($LASTEXITCODE) { throw "Godot C# solution build failed with exit code $LASTEXITCODE." }
 
       - name: Export Windows x64 game
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "GodotProject/build/Richman-Windows-x64" | Out-Null
           & $env:GODOT_EXE --headless --path GodotProject --export-release "Windows Desktop" "build/Richman-Windows-x64/Richman.exe"
-          if ($LASTEXITCODE -ne 0) { throw "Godot Windows export failed with exit code $LASTEXITCODE." }
+          if ($LASTEXITCODE) { throw "Godot Windows export failed with exit code $LASTEXITCODE." }
           if (-not (Test-Path -LiteralPath "GodotProject/build/Richman-Windows-x64/Richman.exe")) { throw "Godot export did not produce Richman.exe." }
 
       - name: Write playtest instructions and build info
@@ -136,7 +136,7 @@ jobs:
         shell: pwsh
         run: |
           & "GodotProject/build/Richman-Windows-x64/Richman.exe" --headless -- --test-pawn-move
-          if ($LASTEXITCODE -ne 0) { throw "Exported game startup or pawn movement failed with exit code $LASTEXITCODE." }
+          if ($LASTEXITCODE) { throw "Exported game startup or pawn movement failed with exit code $LASTEXITCODE." }
 
       - name: Package and verify playtest ZIP
         shell: pwsh
