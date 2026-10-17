@@ -31,7 +31,7 @@ jobs:
         run: dotnet build Richman.Core.Standalone.csproj --configuration Release --no-restore
 
       - name: Build simulation harness
-        run: dotnet build Tools/Simulation/Richman.Simulation.csproj --configuration Release --no-restore
+        run: dotnet build Tools/Simulation/Richman.Simulation.csproj --configuration Release
 
       - name: Run Core simulation verification
         run: dotnet run --no-build --configuration Release --project Tools/Simulation/Richman.Simulation.csproj -- --self-test
