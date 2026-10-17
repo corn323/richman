@@ -72,7 +72,7 @@ jobs:
             throw "Expected one Godot 4.7.2 .NET editor executable, found $($godotCandidates.Count). Archive files: $archiveFiles"
           }
           $godot = $godotCandidates[0].FullName
-          $installedTemplates = Join-Path $env:APPDATA "Godot\export_templates\4.7.2.stable"
+          $installedTemplates = Join-Path $env:APPDATA "Godot\export_templates\4.7.2.stable.mono"
           New-Item -ItemType Directory -Force -Path $installedTemplates | Out-Null
           $templateSource = Join-Path $templateDir "templates"
           if (Test-Path -LiteralPath $templateSource) {
@@ -85,7 +85,7 @@ jobs:
           }
           $installedVersion = Join-Path $installedTemplates "version.txt"
           if (-not (Test-Path -LiteralPath $installedVersion)) { throw "Godot export templates did not install a version.txt file." }
-          if ((Get-Content -Raw -LiteralPath $installedVersion).Trim() -ne "4.7.2.stable") { throw "Godot export templates do not match version 4.7.2.stable." }
+          if ((Get-Content -Raw -LiteralPath $installedVersion).Trim() -ne "4.7.2.stable.mono") { throw "Godot .NET export templates do not match version 4.7.2.stable.mono." }
           Add-Content -Path $env:GITHUB_ENV -Value "GODOT_EXE=$godot"
 
       - name: Import Godot resources
