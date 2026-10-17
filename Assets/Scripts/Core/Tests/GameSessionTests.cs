@@ -115,6 +115,19 @@ namespace Richman.Core.Tests
             Assert.That(session.State.LastEventMessage, Does.Contain("flew"));
         }
 
+        [TestCase("airport-changi", "airport-incheon")]
+        [TestCase("airport-incheon", "airport-changi")]
+        [TestCase("airport-dubai", "airport-jfk")]
+        [TestCase("airport-jfk", "airport-dubai")]
+        public void WorldTourAirportsUseTheirDeclaredRoutes(string originId, string destinationId)
+        {
+            var board = PrototypeBoardFactory.Create();
+            var origin = board.GetTile(originId);
+            Assert.That(origin, Is.Not.Null);
+            Assert.That(origin.AirportDestinationId, Is.EqualTo(destinationId));
+            Assert.That(board.GetTile(origin.AirportDestinationId).Type, Is.EqualTo(BoardTileType.Airport));
+        }
+
         [Test]
         public void HospitalStaySkipsThePlayersNextTurnWithoutRollingDice()
         {

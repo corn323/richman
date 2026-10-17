@@ -52,7 +52,8 @@ namespace Richman.Core
             int effectAmount = 0,
             IEnumerable<string> nextTileIds = null,
             bool isMainRoute = true,
-            string rejoinsAtId = null)
+            string rejoinsAtId = null,
+            string airportDestinationId = null)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Tile id is required.", nameof(id));
             if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("Display name is required.", nameof(displayName));
@@ -76,6 +77,7 @@ namespace Richman.Core
             _nextTileIdsView = Array.AsReadOnly(_nextTileIds);
             IsMainRoute = isMainRoute;
             RejoinsAtId = rejoinsAtId ?? string.Empty;
+            AirportDestinationId = airportDestinationId ?? string.Empty;
 
             if (type == BoardTileType.Property)
             {
@@ -108,6 +110,7 @@ namespace Richman.Core
         public IReadOnlyList<string> NextTileIds => _nextTileIdsView;
         public bool IsMainRoute { get; }
         public string RejoinsAtId { get; }
+        public string AirportDestinationId { get; }
         public BoardMapPosition MapPosition { get; private set; }
 
         public int GetRent(int upgradeLevel)
@@ -176,6 +179,9 @@ namespace Richman.Core
                 {
                     if (!_tilesById.ContainsKey(tile.NextTileIds[edge])) throw new ArgumentException("Tile connection points to a missing id: " + tile.Id + " -> " + tile.NextTileIds[edge], nameof(tiles));
                 }
+                if (tile.Type == BoardTileType.Airport &&
+                    (!_tilesById.TryGetValue(tile.AirportDestinationId, out var airportDestination) || airportDestination.Type != BoardTileType.Airport || airportDestination.Id == tile.Id))
+                    throw new ArgumentException("Every airport must route to a different valid airport: " + tile.Id, nameof(tiles));
                 if (!tile.IsMainRoute && string.IsNullOrWhiteSpace(tile.RejoinsAtId)) throw new ArgumentException("A branch tile must declare its rejoin id: " + tile.Id, nameof(tiles));
             }
             for (var i = 0; i < _mainRouteTileCount; i++)
@@ -365,7 +371,7 @@ namespace Richman.Core
                 case 0: return Simple(index, id, BoardTileType.Start, "起點・新加坡", next);
                 case 1: return Property(index, id, "濱海灣花園", "singapore", 140, 14, 55, new[] { 14, 28, 50, 84, 130 }, next);
                 case 2: return Property(index, id, "濱海灣金沙步道", "singapore", 160, 16, 65, new[] { 16, 32, 58, 98, 150 }, next);
-                case 3: return Simple(index, id, BoardTileType.Airport, "樟宜國際機場", next);
+                case 3: return Airport(index, id, "樟宜國際機場", "airport-incheon", next);
                 case 4: return Simple(index, id, BoardTileType.Chance, "機會・世界博覽會", next);
                 case 5: return Property(index, id, "京都祇園町家", "japan", 150, 15, 60, new[] { 15, 30, 54, 90, 140 }, next);
                 case 6: return Property(index, id, "京都茶屋小徑", "japan", 170, 17, 68, new[] { 17, 34, 61, 102, 158 }, next);
@@ -377,7 +383,7 @@ namespace Richman.Core
                 case 12: return Effect(index, id, BoardTileType.Tax, "香港港口通行費", 90, next);
                 case 13: return Property(index, id, "首爾仁寺洞", "korea", 180, 18, 72, new[] { 18, 36, 65, 108, 168 }, next);
                 case 14: return Property(index, id, "景福宮文化街區", "korea", 205, 20, 82, new[] { 20, 40, 72, 120, 185 }, next);
-                case 15: return Simple(index, id, BoardTileType.Airport, "仁川國際機場", next);
+                case 15: return Airport(index, id, "仁川國際機場", "airport-changi", next);
                 case 16: return Property(index, id, "上海外灘", "china", 220, 22, 88, new[] { 22, 44, 79, 132, 204 }, next);
                 case 17: return Property(index, id, "上海豫園", "china", 200, 20, 80, new[] { 20, 40, 72, 120, 185 }, next);
                 case 18: return Simple(index, id, BoardTileType.Chance, "機會・夜市奇遇", next);
@@ -386,7 +392,7 @@ namespace Richman.Core
                 case 21: return Property(index, id, "峇里島海崖度假村", "bali", 215, 21, 86, new[] { 21, 42, 76, 126, 195 }, next);
                 case 22: return Property(index, id, "孟買克勞福市場", "india", 210, 21, 84, new[] { 21, 42, 76, 126, 195 }, next);
                 case 23: return Property(index, id, "杜拜河畔市集", "uae", 230, 23, 92, new[] { 23, 46, 83, 138, 213 }, next);
-                case 24: return Simple(index, id, BoardTileType.Airport, "杜拜國際機場", next);
+                case 24: return Airport(index, id, "杜拜國際機場", "airport-jfk", next);
                 case 25: return Property(index, id, "羅馬競技場廣場", "italy", 240, 24, 96, new[] { 24, 48, 86, 144, 222 }, next);
                 case 26: return Property(index, id, "羅馬特拉斯提弗列", "italy", 225, 22, 90, new[] { 22, 44, 79, 132, 204 }, next);
                 case 27: return Property(index, id, "巴黎蒙馬特街區", "france", 250, 25, 100, new[] { 25, 50, 90, 150, 232 }, next);
@@ -400,7 +406,7 @@ namespace Richman.Core
                 case 35: return Property(index, id, "里約嘉年華大道", "brazil", 245, 24, 98, new[] { 24, 48, 86, 144, 222 }, next);
                 case 36: return Property(index, id, "開普敦桌山步道", "south-africa", 270, 27, 108, new[] { 27, 54, 97, 162, 250 }, next);
                 case 37: return Property(index, id, "里斯本 28 號電車街", "portugal", 230, 23, 92, new[] { 23, 46, 83, 138, 213 }, next);
-                case 38: return Simple(index, id, BoardTileType.Airport, "甘迺迪國際機場", next);
+                case 38: return Airport(index, id, "甘迺迪國際機場", "airport-dubai", next);
                 case 39: return Property(index, id, "馬德里麗池公園", "spain", 235, 23, 94, new[] { 23, 46, 83, 138, 213 }, next);
                 default: throw new ArgumentOutOfRangeException(nameof(index));
             }
@@ -414,6 +420,11 @@ namespace Richman.Core
         private static BoardTileDefinition Effect(int index, string id, BoardTileType type, string name, int amount, IEnumerable<string> next)
         {
             return new BoardTileDefinition(id, type, name, index, 0, 0, 0, null, string.Empty, id, amount, next);
+        }
+
+        private static BoardTileDefinition Airport(int index, string id, string name, string destinationId, IEnumerable<string> next)
+        {
+            return new BoardTileDefinition(id, BoardTileType.Airport, name, index, 0, 0, 0, null, string.Empty, id, 0, next, true, null, destinationId);
         }
 
         private static BoardTileDefinition Property(int index, string id, string name, string district, int price, int rent, int upgradeCost, int[] rents, IEnumerable<string> next, bool mainRoute = true, string rejoinsAt = null)

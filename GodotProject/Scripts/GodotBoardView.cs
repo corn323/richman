@@ -24,8 +24,9 @@ namespace Richman.GodotPresentation
             var model = gltf.GenerateScene(gltfState);
             if (model == null) throw new InvalidDataException("Godot could not create a scene from archipelago_map.glb.");
             root.AddChild(model);
-            foreach (var child in model.FindChildren("TileSocket_*", "MeshInstance3D", true, false))
-                if (child is VisualInstance3D visual) visual.Visible = false;
+            foreach (var pattern in new[] { "TileSocket_*", "TileTop_*", "DistrictBand_*", "TileLabel_*", "Icon_*" })
+                foreach (var child in model.FindChildren(pattern, "Node3D", true, false))
+                    if (child is Node3D visual) visual.Visible = false;
 
             for (var i = 0; i < board.TileCount; i++) BuildTile(board.GetTileAt(i));
             for (var i = 0; i < players.Count; i++) BuildPawn(players[i]);

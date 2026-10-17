@@ -67,7 +67,8 @@ namespace Richman.GodotPresentation
             _roll.Disabled = !(canAct && state.Phase == TurnPhase.AwaitingRoll);
             _buy.Disabled = !(canAct && state.PendingAction == PendingAction.BuyProperty);
             _upgrade.Disabled = !(canAct && state.PendingAction == PendingAction.UpgradeProperty);
-            _endTurn.Disabled = !(canAct && (state.Phase == TurnPhase.AwaitingAction || state.Phase == TurnPhase.AwaitingEndTurn));
+            _endTurn.Disabled = !(canAct && state.PendingAction != PendingAction.ChooseRoute &&
+                (state.Phase == TurnPhase.AwaitingAction || state.Phase == TurnPhase.AwaitingEndTurn));
             foreach (var child in _routeOptions.GetChildren()) { _routeOptions.RemoveChild(child); child.QueueFree(); }
             if (state.PendingAction == PendingAction.ChooseRoute)
             {

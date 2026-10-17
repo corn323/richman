@@ -42,7 +42,8 @@ namespace Richman.Simulation
                 tiles.Add(new { id = tile.Id, type = tile.Type.ToString(), display_name = tile.DisplayName, position_index = tile.PositionIndex,
                     position = new { x = tile.MapPosition.X, y = tile.MapPosition.Y, z = tile.MapPosition.Z }, rotation = tile.MapPosition.RotationDegrees,
                     next_tiles = tile.NextTileIds, is_main_route = tile.IsMainRoute, rejoins_at = tile.RejoinsAtId,
-                    district = tile.DistrictId, price = tile.PurchasePrice, rent = tile.BaseRent, upgrade_cost = tile.UpgradeCost, rent_levels = tile.RentLevels });
+                    district = tile.DistrictId, price = tile.PurchasePrice, rent = tile.BaseRent, upgrade_cost = tile.UpgradeCost, rent_levels = tile.RentLevels,
+                    airport_destination_id = tile.AirportDestinationId });
             }
             var fullPath = Path.GetFullPath(outputPath);
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
@@ -57,7 +58,20 @@ namespace Richman.Simulation
             Require(board.GetTileAt(30).Id == "london-prison", "London prison tile");
             Require(board.GetTileAt(39).NextTileIds[0] == board.GetTileAt(0).Id, "main route closure");
             Require(board.GetNextTiles(10).Count == 2, "Hong Kong route fork");
+            Require(board.GetTile("airport-changi").AirportDestinationId == "airport-incheon", "Changi route");
+            Require(board.GetTile("airport-incheon").AirportDestinationId == "airport-changi", "Incheon route");
+            Require(board.GetTile("airport-dubai").AirportDestinationId == "airport-jfk", "Dubai route");
+            Require(board.GetTile("airport-jfk").AirportDestinationId == "airport-dubai", "JFK route");
             Console.WriteLine("CORE_ROUTE_OK main=40 all=47 branches=3 merges=validated");
+            Console.WriteLine("CORE_AIRPORTS_OK changi<->incheon dubai<->jfk");
+
+            var airportSession = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
+                new ScriptedDiceRoller(new DiceResult(1, 2)));
+            var airportLanding = airportSession.Execute(new RollDiceCommand(1));
+            Require(airportLanding.Succeeded && airportLanding.PathTileIndices.Count == 3 &&
+                    airportSession.State.GetPlayer(1).CurrentTileIndex == board.GetTile("airport-incheon").PositionIndex,
+                "Changi airport landing flies to its declared destination");
+            Console.WriteLine("CORE_AIRPORT_LANDING_OK origin=airport-changi destination=airport-incheon");
 
             var branchSession = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
                 new ScriptedDiceRoller(new DiceResult(4, 4), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(1, 1), new DiceResult(3, 3)));

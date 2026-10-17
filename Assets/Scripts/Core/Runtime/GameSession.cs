@@ -288,16 +288,11 @@ namespace Richman.Core
 
         private void ResolveAirport(PlayerState player, BoardTileDefinition airport)
         {
-            for (var i = 0; i < Board.TileCount; i++)
-            {
-                var candidate = Board.GetTileAt(i);
-                if (candidate.Type != BoardTileType.Airport || candidate.PositionIndex == airport.PositionIndex) continue;
-                player.MoveTo(candidate.PositionIndex);
-                State.LastEventMessage = "Airport transfer: flew from " + airport.DisplayName + " to " + candidate.DisplayName + ".";
-                return;
-            }
-
-            State.LastEventMessage = "Airport is closed; no connecting airport is available.";
+            var destination = Board.GetTile(airport.AirportDestinationId);
+            if (destination == null || destination.Type != BoardTileType.Airport)
+                throw new InvalidOperationException("Airport destination is missing or is not an airport: " + airport.Id + " -> " + airport.AirportDestinationId);
+            player.MoveTo(destination.PositionIndex);
+            State.LastEventMessage = "機場航線：「" + airport.DisplayName + "」飛往「" + destination.DisplayName + "」。";
         }
 
         private void DrawCard(PlayerState player, MapCard[] deck, ref int drawIndex)

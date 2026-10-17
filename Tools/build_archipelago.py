@@ -1,13 +1,21 @@
 import bpy, math, json, os
+from pathlib import Path
 from mathutils import Vector, Matrix
 
-OUT = r'C:\Users\User\Desktop\code\richman\GodotProject'
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUT = str(PROJECT_ROOT / 'GodotProject')
 ASSET = os.path.join(OUT, 'Assets')
 DATA = os.path.join(OUT, 'Data')
 os.makedirs(ASSET, exist_ok=True); os.makedirs(DATA, exist_ok=True)
 
 # Preserve all existing objects and add the map to its own categorized collections.
 scene = bpy.context.scene
+for old_collection in list(scene.collection.children):
+    if old_collection.name.startswith(('Terrain', 'River and Sea', 'MainRoute', 'Landmarks', 'Buildings', 'Decorations', 'ChanceDecks')):
+        for old_object in list(old_collection.objects): old_collection.objects.unlink(old_object)
+for old_object in list(scene.objects):
+    if old_object.name.startswith(('Large softbox', 'Ocean fill', 'Isometric map camera')):
+        if old_object.name in scene.collection.objects: scene.collection.objects.unlink(old_object)
 with open(os.path.join(DATA, 'archipelago_tiles.json'), encoding='utf-8') as source:
     CORE_MAP = json.load(source)
 CORE_TILES = CORE_MAP['tiles']
@@ -20,6 +28,9 @@ scene.view_settings.view_transform = 'Standard'
 scene.view_settings.look = 'Medium High Contrast'
 
 def collection(name):
+    for existing in scene.collection.children:
+        if existing.name == name or existing.name.startswith(name + '.'):
+            return existing
     c=bpy.data.collections.new(name); scene.collection.children.link(c); return c
 terrain=collection('Terrain'); water=collection('River and Sea'); route=collection('MainRoute - 36 stable tile sockets'); landmarks=collection('Landmarks'); buildings=collection('Buildings'); deco=collection('Decorations'); decks=collection('ChanceDecks')
 MAP_COLLECTIONS={terrain,water,route,landmarks,buildings,deco,decks}
@@ -93,10 +104,10 @@ for i,tile in enumerate(CORE_TILES):
     # colored district ribbon at landward edge, retains clear pawn centre
     cube('DistrictBand_%02d'%i,(x,y+.105,z+.42),(1.12,.07,.12),gold if t=='start' else roofblue if t=='property' else plate_mat,route,.025)
     label('TileLabel_%02d'%i,name,(x,y+.28,z-.36),.18,dark if t in ('start','hospital','chance','destiny','property') else white2,route)
-    if t in ('start','airport','hospital','prison','court','chance','destiny'):
-        icon={'start':'START','airport':'✈','hospital':'+','prison':'JAIL','court':'§','chance':'?','destiny':'✦'}.get(t,'')
+    if t.lower() in ('start','airport','hospital','prison','court','chance','destiny'):
+        icon={'start':'START','airport':'✈','hospital':'+','prison':'JAIL','court':'§','chance':'?','destiny':'✦'}.get(t.lower(),'')
         if icon:
-        label('Icon_%02d'%i,icon,(x,y+.34,z+.12),.30,white2 if t in ('airport','prison','destiny') else dark,route)
+            label('Icon_%02d'%i,icon,(x,y+.34,z+.12),.30,white2 if t in ('airport','prison','destiny') else dark,route)
 
 # Stylized sculpted coastline: layered stepped land mass with rocky vertical faces.
 def island(cx,cz,sx,sz,top,seed,material=grass):
@@ -132,13 +143,15 @@ for a in range(8):
     cyl('Garden Flower Stem',(x,1.58,z),.035,.42,green,landmarks,8)
     uv('Flower',(x,1.8,z),(.18,.13,.18),[roofred,pink,gold,white2][a%4],landmarks)
 
-# Road: broad terraced segments follow the route outside the readable tile centres.
-for i in range(n):
-    (x1,z1),(x2,z2)=coords[i],coords[(i+1)%n]; dx=x2-x1; dz=z2-z1; d=math.hypot(dx,dz); angle=-math.atan2(dz,dx)
-    # road islands sit flush with tiles, winding around water channels
-    ob=cube('Promenade_%02d'%i,((x1+x2)/2,.34,(z1+z2)/2),(d+.20,.22,.62),road,route,.12); ob.rotation_euler[1]=angle
-    # low stone edge beneath the promenade
-    edge=cube('Promenade_Rim_%02d'%i,((x1+x2)/2,.22,(z1+z2)/2),(d+.27,.12,.78),roadedge,route,.09); edge.rotation_euler[1]=angle
+# Road: build every graph edge, including each branch and merge, from Core positions.
+tile_by_id={tile['id']:tile for tile in CORE_TILES}
+for tile in CORE_TILES:
+    source=tile['position']
+    for next_id in tile['next_tiles']:
+        target=tile_by_id[next_id]['position']; dx=target['x']-source['x']; dz=target['z']-source['z']; d=math.hypot(dx,dz); angle=-math.atan2(dz,dx)
+        mid=( (source['x']+target['x'])/2, (source['y']+target['y'])/2-.16, (source['z']+target['z'])/2 )
+        ob=cube('Promenade_%s_to_%s'%(tile['id'],next_id),mid,(d+.20,.22,.62),road,route,.12); ob.rotation_euler[1]=angle
+        edge=cube('Promenade_Rim_%s_to_%s'%(tile['id'],next_id),(mid[0],mid[1]-.12,mid[2]),(d+.27,.12,.78),roadedge,route,.09); edge.rotation_euler[1]=angle
 
 # Geographical city zones, sculpted landmarks, tree groves.
 def tree(x,z,s=1):
@@ -189,16 +202,19 @@ for j in range(12):
     a=math.tau*j/12; x=cx+1.39*math.cos(a); z=cz+1.39*math.sin(a)
     cube('Arena arch pier',(x,1.48,z),(.18,.62,.18),white,landmarks,.04)
 # Hospital and prison / courthouse with silhouette-specific forms.
-hx,hz=coords[13]; cube('Hospital main block',(hx,2.0,hz), (1.9,2.35,1.35),white,landmarks,.13)
+def route_position(tile_type, fallback_index):
+    tile=next((t for t in CORE_TILES if t['type']==tile_type),None)
+    p=tile['position'] if tile else CORE_TILES[fallback_index]['position']; return p['x'],p['z']
+hx,hz=route_position('Hospital',5); cube('Hospital main block',(hx,2.0,hz), (1.9,2.35,1.35),white,landmarks,.13)
 cube('Hospital red cross horizontal',(hx,3.5,hz-.72),(1.05,.23,.09),roofred,landmarks,.025); cube('Hospital red cross vertical',(hx,3.5,hz-.72),(.23,1.05,.09),roofred,landmarks,.025)
 for xoff in (-.58,0,.58): cube('Hospital window',(hx+xoff,2.6,hz-.70),(.22,.28,.05),glass,landmarks,.025)
-px,pz=coords[23]; cube('Prison keep',(px,1.75,pz),(1.7,1.6,1.25),dark,landmarks,.08)
+px,pz=route_position('Prison',30); cube('Prison keep',(px,1.75,pz),(1.7,1.6,1.25),dark,landmarks,.08)
 for xoff in (-.42,-.14,.14,.42): cube('Prison bar',(px+xoff,1.7,pz-.67),(.045,.72,.04),white2,landmarks,.01)
-cx,cz=coords[27]; cube('Court marble hall',(cx,1.42,cz),(2.0,1.48,1.4),white,landmarks,.08)
+cx,cz=route_position('Court',27); cube('Court marble hall',(cx,1.42,cz),(2.0,1.48,1.4),white,landmarks,.08)
 for xoff in (-.7,-.24,.24,.7): cyl('Courthouse column',(cx+xoff,1.7,cz-.73),.12,1.15,white,landmarks,12)
 cyl('Courthouse pediment',(cx,2.36,cz-.72),1.12,.5,roofgold,landmarks,3,0)
 # airports and aircraft are on route side but offset behind the tile
-for idx in (5,25):
+for idx in [t['position_index'] for t in CORE_TILES[:n] if t['type']=='Airport']:
     x,z=coords[idx]; cube('Airfield apron',(x,1.0,z+1.65),(3.2,.12,2.0),dark,landmarks,.12)
     label('Airport runway marking','✈',(x,1.09,z+1.65),.76,white2,landmarks)
     # stylized aircraft: fuselage, wings, tail, twin engines
@@ -218,25 +234,7 @@ for xx,title,material in ((-.98,'CHANCE',pink),(.98,'DESTINY',fate)):
     for j in range(5): cube(title+' Physical Card %d'%j,(xx,1.56+j*.055,0),(1.20,.09,1.42),material if j==4 else white2,decks,.09)
     cube(title+' Deck Top',(xx,1.88,0),(1.12,.08,1.32),material,decks,.08)
     label(title+' Deck Label',title,(xx,1.95,.15),.23,white2,decks)
-# branch spur to island-view platform with explicit reconnect metadata and modeled bridge.
-bx,bz=4.0,0.0
-for j in range(7):
-    a=j/6; x=bx+a*2.8; z=bz+2.9+a*1.3
-    cube('Scenic branch stepping stone %02d'%j,(x,.77,z),(0.72,.18,.64),roofgold if j==0 else road,route,.12)
-    if j<6:
-        xx=x+.23; zz=z+.38
-        cube('Arch bridge deck %02d'%j,(xx,.74,zz),(.88,.15,.22),road,landmarks,.055)
-        for side in (-1,1):
-            cyl('Arch bridge support',(xx,.48,zz+side*.15),.055,.55,roadedge,landmarks,8)
-branch={'id':'scenic-overlook','type':'branch_waypoint','display_name':'Island Lookout','x':round(bx+1.4,3),'y':.95,'z':round(4.85,3),'rotation':0,'next_tiles':['lookout-return'],'branch_tiles':[],'rejoins_at':'mosaic-plaza','purpose':'optional scenic route choice; returns to main loop'}
-branch['main_route']=False
-branch['position_index']=36
-branch['next_tiles']=['lookout-return']
-branch_return={'id':'lookout-return','position_index':37,'type':'branch_return','display_name':'Lookout Return','x':round(bx+2.8,3),'y':.95,'z':round(5.5,3),'rotation':0,'next_tiles':['mosaic-plaza'],'branch_tiles':[],'rejoins_at':'mosaic-plaza','purpose':'rejoin main loop after optional overlook'}
-for t in tiles:
-    if t['position_index']==17: t['branch_tiles']=['scenic-overlook']
-tiles.extend((branch,branch_return))
-with open(os.path.join(DATA,'archipelago_tiles.json'),'w',encoding='utf-8') as f: json.dump({'version':1,'units':'meters','coordinate_system':'Godot Y-up; Blender Z-up converted by glTF exporter','main_route':['start']+[(('airport-1' if i==5 else 'airport-2') if i in (5,25) else 'hospital' if i==13 else 'prison' if i==23 else 'court' if i==27 else ('chance-'+str(i) if types[i]=='chance' else 'destiny-'+str(i) if types[i]=='destiny' else names[i].lower().replace(' ','-'))) for i in range(1,n)],'branch_routes':[branch],'tiles':tiles},f,ensure_ascii=False,indent=2)
+# The JSON is exported by Richman.Core; never reconstruct or overwrite route data here.
 
 # sea disc beneath islands, multiple shoals/rock reefs and tiny coastal beacons
 cyl('Ocean plinth',(0,-.55,0),17.7,1.0,sea,water,96)
@@ -262,10 +260,11 @@ bpy.ops.object.select_all(action='DESELECT')
 blend=os.path.join(ASSET,'archipelago_map.blend'); glb=os.path.join(ASSET,'archipelago_map.glb')
 bpy.ops.wm.save_as_mainfile(filepath=blend)
 for ob in bpy.data.objects: ob.select_set(False)
-for ob in map_objects: ob.select_set(True)
-bpy.context.view_layer.objects.active=next(o for o in map_objects if o.name=='Ocean plinth')
+export_objects=[o for o in map_objects if not o.name.startswith(('TileSocket_', 'TileTop_', 'DistrictBand_', 'TileLabel_', 'Icon_'))]
+for ob in export_objects: ob.select_set(True)
+bpy.context.view_layer.objects.active=next(o for o in export_objects if o.name.startswith('Ocean plinth'))
 bpy.ops.export_scene.gltf(filepath=glb,export_format='GLB',use_selection=True,export_apply=True,export_yup=True,export_materials='EXPORT',export_cameras=False,export_lights=False,use_active_scene=True)
-print('SAVED',blend,os.path.getsize(blend),'GLB',glb,os.path.getsize(glb),'tiles',len(tiles),'main route',len([x for x in tiles if x.get('main_route')]),'branch nodes',2)
+print('SAVED',blend,os.path.getsize(blend),'GLB',glb,os.path.getsize(glb),'source tiles',len(tiles),'main route',len([x for x in tiles if x.get('is_main_route')]),'branch nodes',len([x for x in tiles if not x.get('is_main_route')]),'exported tile surfaces',0)
 
 
 
