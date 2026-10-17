@@ -91,8 +91,8 @@ jobs:
       - name: Import Godot resources
         shell: pwsh
         run: |
-          & $env:GODOT_EXE --headless --editor --path GodotProject --import --quit
-          if ($LASTEXITCODE) { throw "Godot resource import failed with exit code $LASTEXITCODE." }
+          $godotRun = Start-Process -FilePath $env:GODOT_EXE -ArgumentList @("--headless", "--editor", "--path", "GodotProject", "--import", "--quit") -NoNewWindow -Wait -PassThru
+          if ($godotRun.ExitCode -ne 0) { throw "Godot resource import failed with exit code $($godotRun.ExitCode)." }
 
       - name: Build Godot C# solution
         run: dotnet build GodotProject/Richman.Godot.csproj --configuration Release
@@ -100,8 +100,8 @@ jobs:
       - name: Build Godot editor assemblies
         shell: pwsh
         run: |
-          & $env:GODOT_EXE --headless --editor --path GodotProject --build-solutions --quit
-          if ($LASTEXITCODE) { throw "Godot C# solution build failed with exit code $LASTEXITCODE." }
+          $godotRun = Start-Process -FilePath $env:GODOT_EXE -ArgumentList @("--headless", "--editor", "--path", "GodotProject", "--build-solutions", "--quit") -NoNewWindow -Wait -PassThru
+          if ($godotRun.ExitCode -ne 0) { throw "Godot C# solution build failed with exit code $($godotRun.ExitCode)." }
 
       - name: Export Windows x64 game
         shell: pwsh
@@ -110,8 +110,8 @@ jobs:
           $outputDirectory = Join-Path $projectPath "build\Richman-Windows-x64"
           $gameExecutable = Join-Path $outputDirectory "Richman.exe"
           New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-          & $env:GODOT_EXE --headless --path $projectPath --export-release "Windows Desktop" $gameExecutable
-          if ($LASTEXITCODE) { throw "Godot Windows export failed with exit code $LASTEXITCODE." }
+          $godotRun = Start-Process -FilePath $env:GODOT_EXE -ArgumentList @("--headless", "--path", $projectPath, "--export-release", "Windows Desktop", $gameExecutable) -NoNewWindow -Wait -PassThru
+          if ($godotRun.ExitCode -ne 0) { throw "Godot Windows export failed with exit code $($godotRun.ExitCode)." }
           if (-not (Test-Path -LiteralPath $gameExecutable)) {
             $nearbyExecutables = @(Get-ChildItem -LiteralPath (Get-Location).Path -Filter "Richman.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) -join ", "
             throw "Godot export did not produce Richman.exe at $gameExecutable. Found: $nearbyExecutables"
@@ -141,8 +141,9 @@ jobs:
       - name: Smoke test exported game and animate one pawn move
         shell: pwsh
         run: |
-          & "GodotProject/build/Richman-Windows-x64/Richman.exe" --headless -- --test-pawn-move
-          if ($LASTEXITCODE) { throw "Exported game startup or pawn movement failed with exit code $LASTEXITCODE." }
+          $gameExecutable = (Resolve-Path "GodotProject/build/Richman-Windows-x64/Richman.exe").Path
+          $gameRun = Start-Process -FilePath $gameExecutable -ArgumentList @("--headless", "--", "--test-pawn-move") -NoNewWindow -Wait -PassThru
+          if ($gameRun.ExitCode -ne 0) { throw "Exported game startup or pawn movement failed with exit code $($gameRun.ExitCode)." }
 
       - name: Package and verify playtest ZIP
         shell: pwsh
