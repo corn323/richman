@@ -107,7 +107,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "GodotProject/build/Richman-Windows-x64" | Out-Null
-          & $env:GODOT_EXE --headless --path GodotProject --export-release "Windows Desktop" "build/Richman-Windows-x64/Richman.exe"
+          & $env:GODOT_EXE --headless --path GodotProject --export-release "Windows Desktop" "GodotProject/build/Richman-Windows-x64/Richman.exe"
           if ($LASTEXITCODE) { throw "Godot Windows export failed with exit code $LASTEXITCODE." }
           if (-not (Test-Path -LiteralPath "GodotProject/build/Richman-Windows-x64/Richman.exe")) { throw "Godot export did not produce Richman.exe." }
 
