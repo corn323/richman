@@ -129,6 +129,29 @@ namespace Richman.Core.Events
         public BoardTileType TileType { get; }
     }
 
+    // Phase 1d-2（條件邊）：移動解析在某一格發現「目前開著的邊」數量是 0（所有出邊都
+    // 因為 RequiredFlag 未滿足而關閉）時發出。玩家停在這一格（TileIndex/TileId 就是
+    // 玩家停下來的位置，不是某個「原本想去但去不了」的目的地），本次移動的剩餘步數
+    // 直接作廢，接著照常對這一格跑 ResolveLanding（跟步數正常走完時一樣）。
+    public sealed class MovementBlocked : GameEvent
+    {
+        public MovementBlocked(int playerId, int tileIndex, string tileId)
+        { PlayerId = playerId; TileIndex = tileIndex; TileId = tileId; }
+        public int PlayerId { get; }
+        public int TileIndex { get; }
+        public string TileId { get; }
+    }
+
+    // Phase 1d-2（條件邊）：GameSession.SetBoardFlag/ClearBoardFlag 實際改變了
+    // GameState.BoardFlags（而不是對一個已經是該狀態的 flag 重複呼叫）時發出。
+    // IsSet=true 代表這個 flag 剛被加入（開啟相關條件邊），false 代表剛被移除（關閉）。
+    public sealed class BoardFlagChanged : GameEvent
+    {
+        public BoardFlagChanged(string flag, bool isSet) { Flag = flag; IsSet = isSet; }
+        public string Flag { get; }
+        public bool IsSet { get; }
+    }
+
     public sealed class SalaryCollected : GameEvent
     {
         public SalaryCollected(int playerId, int amount) { PlayerId = playerId; Amount = amount; }

@@ -21,5 +21,6 @@
     <Compile Include="ArchitectureTests.cs" />
     <Compile Include="EventSequenceTests.cs" />
     <Compile Include="ResolveDecisionTests.cs" />
+    <Compile Include="ConditionalEdgeTests.cs" />
   </ItemGroup>
 </Project>

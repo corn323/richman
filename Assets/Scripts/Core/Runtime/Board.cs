@@ -31,10 +31,41 @@ namespace Richman.Core
         Destiny
     }
 
+    // Phase 1d-2（條件邊）：一條出邊，帶一個可選的 RequiredFlag。RequiredFlag 空字串＝
+    // 永遠開啟（相容既有的無條件 NextTileIds）；非空代表這條邊只有在 GameState.BoardFlags
+    // 含有這個 flag 時才「打開」，移動解析（GameSession.ContinueMovement）才會把它納入
+    // 候選。building-time 的圖驗證（連通性）把所有邊都當作開啟——flag 關閉造成的「暫時
+    // 不可達」是執行期語意，不是建構期的圖結構錯誤（見 BoardDefinition 建構子的註解）。
+    public readonly struct BoardEdgeDefinition
+    {
+        public BoardEdgeDefinition(string toTileId, string requiredFlag = null)
+        {
+            if (string.IsNullOrWhiteSpace(toTileId)) throw new ArgumentException("An edge needs a destination tile id.", nameof(toTileId));
+            ToTileId = toTileId;
+            RequiredFlag = requiredFlag ?? string.Empty;
+        }
+
+        public string ToTileId { get; }
+        public string RequiredFlag { get; }
+        public bool IsConditional => RequiredFlag.Length > 0;
+    }
+
+    // Phase 1d-2（通用 pass-through 觸發）：取代硬編碼的「PositionIndex == StartPositionIndex
+    // 才給薪」。目前只有 GrantStartSalary 這一種觸發（Start 格），但任何格子都可以結構上掛
+    // 這個概念——Phase 3 的 Effect 系統接手後，這裡會換成一個通用的 effect 參照，而不是
+    // 寫死的 enum 列舉。
+    public enum PassThroughTriggerKind
+    {
+        None,
+        GrantStartSalary
+    }
+
     public sealed class BoardTileDefinition
     {
         private readonly int[] _rentLevels;
         private readonly ReadOnlyCollection<int> _rentLevelsView;
+        private BoardEdgeDefinition[] _edges;
+        private ReadOnlyCollection<BoardEdgeDefinition> _edgesView;
         private string[] _nextTileIds;
         private ReadOnlyCollection<string> _nextTileIdsView;
 
@@ -53,7 +84,9 @@ namespace Richman.Core
             IEnumerable<string> nextTileIds = null,
             bool isMainRoute = true,
             string rejoinsAtId = null,
-            string airportDestinationId = null)
+            string airportDestinationId = null,
+            IEnumerable<BoardEdgeDefinition> conditionalEdges = null,
+            PassThroughTriggerKind? passThroughTrigger = null)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Tile id is required.", nameof(id));
             if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("Display name is required.", nameof(displayName));
@@ -73,11 +106,16 @@ namespace Richman.Core
             VisualId = visualId ?? string.Empty;
             EffectAmount = effectAmount;
             _rentLevels = rentLevels == null ? Array.Empty<int>() : new List<int>(rentLevels).ToArray();
-            _nextTileIds = nextTileIds == null ? Array.Empty<string>() : new List<string>(nextTileIds).ToArray();
-            _nextTileIdsView = Array.AsReadOnly(_nextTileIds);
+            SetEdges(nextTileIds, conditionalEdges);
             IsMainRoute = isMainRoute;
             RejoinsAtId = rejoinsAtId ?? string.Empty;
             AirportDestinationId = airportDestinationId ?? string.Empty;
+            // 目前唯一的 pass-through 觸發是「經過/停在 Start 給薪」。沒有明確指定時，
+            // 依 Type 自動解析（Start 格預設 GrantStartSalary），其餘格預設 None——這與
+            // 舊行為（以 PositionIndex == StartPositionIndex 判斷）完全等價，因為一張
+            // BoardDefinition 永遠恰好只有一個 Start 格。結構上允許任何格顯式覆寫
+            // passThroughTrigger，供未來（Phase 3 Effect）掛任意格的 pass-through 效果。
+            PassThroughTrigger = passThroughTrigger ?? (type == BoardTileType.Start ? PassThroughTriggerKind.GrantStartSalary : PassThroughTriggerKind.None);
 
             if (type == BoardTileType.Property)
             {
@@ -107,10 +145,16 @@ namespace Richman.Core
         public string DistrictId { get; }
         public string VisualId { get; }
         public int EffectAmount { get; }
+        // 所有宣告的出邊目的地 id，無論是否帶 RequiredFlag——圖結構驗證（唯一性、missing id、
+        // 連通性）全部用這份「全部邊視為開啟」的清單把關（見 BoardDefinition 建構子註解）。
+        // 要知道「現在」哪些邊真的開著，請用 Edges（看 RequiredFlag）或
+        // BoardDefinition.GetOpenNextTiles（套用 GameState.BoardFlags 之後的結果）。
         public IReadOnlyList<string> NextTileIds => _nextTileIdsView;
+        public IReadOnlyList<BoardEdgeDefinition> Edges => _edgesView;
         public bool IsMainRoute { get; }
         public string RejoinsAtId { get; }
         public string AirportDestinationId { get; }
+        public PassThroughTriggerKind PassThroughTrigger { get; }
         public BoardMapPosition MapPosition { get; private set; }
 
         public int GetRent(int upgradeLevel)
@@ -120,9 +164,27 @@ namespace Richman.Core
             return _rentLevels[upgradeLevel];
         }
 
+        // 只被 BoardDefinition 建構子的「省略 next 時方便預設」用到（見該處註解），只接受
+        // 無條件邊：這條路徑只在 tile 完全沒有宣告任何邊（條件或無條件）時才會被呼叫，
+        // 不會有覆寫掉既有條件邊的風險。
         internal void SetNextTileIds(IEnumerable<string> nextTileIds)
         {
-            _nextTileIds = new List<string>(nextTileIds).ToArray();
+            SetEdges(nextTileIds, null);
+        }
+
+        private void SetEdges(IEnumerable<string> unconditionalNextTileIds, IEnumerable<BoardEdgeDefinition> conditionalEdges)
+        {
+            var edgeList = new List<BoardEdgeDefinition>();
+            if (unconditionalNextTileIds != null)
+            {
+                foreach (var toTileId in unconditionalNextTileIds) edgeList.Add(new BoardEdgeDefinition(toTileId));
+            }
+            if (conditionalEdges != null) edgeList.AddRange(conditionalEdges);
+
+            _edges = edgeList.ToArray();
+            _edgesView = Array.AsReadOnly(_edges);
+            _nextTileIds = new string[_edges.Length];
+            for (var i = 0; i < _edges.Length; i++) _nextTileIds[i] = _edges[i].ToTileId;
             _nextTileIdsView = Array.AsReadOnly(_nextTileIds);
         }
 
@@ -135,12 +197,27 @@ namespace Richman.Core
         private readonly ReadOnlyCollection<BoardTileDefinition> _tilesView;
         private readonly Dictionary<string, BoardTileDefinition> _tilesById;
         private readonly int _mainRouteTileCount;
+        private readonly HashSet<string> _initialFlags;
 
-        public BoardDefinition(IEnumerable<BoardTileDefinition> tiles)
+        // initialFlags：地圖定義本身要求「一開局就開啟」的 BoardFlags（Phase 1d-2）。
+        // GameSession 建構 GameState 時會用這份清單播種 GameState.BoardFlags；之後的變動
+        // （Phase 3 Effect 透過 GameSession.SetBoardFlag/ClearBoardFlag）不會回寫這裡——
+        // BoardDefinition 本身在整個 Session 生命週期內是不可變的靜態地圖資料。
+        public BoardDefinition(IEnumerable<BoardTileDefinition> tiles, IEnumerable<string> initialFlags = null)
         {
             if (tiles == null) throw new ArgumentNullException(nameof(tiles));
             _tiles = new List<BoardTileDefinition>(tiles);
             if (_tiles.Count < 2) throw new ArgumentException("A board needs at least two tiles.", nameof(tiles));
+
+            _initialFlags = new HashSet<string>(StringComparer.Ordinal);
+            if (initialFlags != null)
+            {
+                foreach (var flag in initialFlags)
+                {
+                    if (string.IsNullOrWhiteSpace(flag)) throw new ArgumentException("A board flag needs a non-empty name.", nameof(initialFlags));
+                    _initialFlags.Add(flag);
+                }
+            }
 
             var ids = new HashSet<string>(StringComparer.Ordinal);
             _tilesById = new Dictionary<string, BoardTileDefinition>(StringComparer.Ordinal);
@@ -224,6 +301,7 @@ namespace Richman.Core
         public int MainRouteTileCount => _mainRouteTileCount;
         public int StartPositionIndex { get; }
         public IReadOnlyList<BoardTileDefinition> Tiles => _tilesView;
+        public IReadOnlyCollection<string> InitialFlags => _initialFlags;
 
         public BoardTileDefinition GetTileAt(int positionIndex)
         {
@@ -233,11 +311,28 @@ namespace Richman.Core
 
         public BoardTileDefinition GetTile(string id) => id != null && _tilesById.TryGetValue(id, out var tile) ? tile : null;
 
+        // 全部宣告的出邊（不管 RequiredFlag），依宣告順序——圖結構工具／驗證／佈局使用。
         public IReadOnlyList<BoardTileDefinition> GetNextTiles(int positionIndex)
         {
             var source = GetTileAt(positionIndex);
             var next = new List<BoardTileDefinition>(source.NextTileIds.Count);
             for (var i = 0; i < source.NextTileIds.Count; i++) next.Add(_tilesById[source.NextTileIds[i]]);
+            return next.AsReadOnly();
+        }
+
+        // Phase 1d-2（條件邊）：移動解析實際要用的版本——只回傳「現在開著」的邊
+        // （RequiredFlag 是空字串，或 isFlagOpen(flag) 回傳 true）。isFlagOpen 刻意用委派
+        // 而不是直接吃 GameState，讓 Board 維持對 GameState 零依賴（GameSession 呼叫時
+        // 直接傳 State.HasBoardFlag 這個方法群組即可）。
+        public IReadOnlyList<BoardTileDefinition> GetOpenNextTiles(int positionIndex, Func<string, bool> isFlagOpen)
+        {
+            var source = GetTileAt(positionIndex);
+            var next = new List<BoardTileDefinition>(source.Edges.Count);
+            for (var i = 0; i < source.Edges.Count; i++)
+            {
+                var edge = source.Edges[i];
+                if (!edge.IsConditional || (isFlagOpen != null && isFlagOpen(edge.RequiredFlag))) next.Add(_tilesById[edge.ToTileId]);
+            }
             return next.AsReadOnly();
         }
 

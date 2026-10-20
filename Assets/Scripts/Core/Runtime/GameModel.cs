@@ -256,6 +256,7 @@ namespace Richman.Core
         private readonly ReadOnlyCollection<PlayerState> _playersView;
         private readonly ReadOnlyCollection<PropertyState> _propertiesView;
         private readonly HashSet<string> _districtRewardsPaid = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _boardFlags = new HashSet<string>(StringComparer.Ordinal);
         private string[] _routeChoiceTileIds = Array.Empty<string>();
         private IReadOnlyList<string> _routeChoiceTileIdsView;
 
@@ -268,6 +269,9 @@ namespace Richman.Core
             _playersView = _players.AsReadOnly();
             _propertiesView = _properties.AsReadOnly();
             _routeChoiceTileIdsView = Array.AsReadOnly(_routeChoiceTileIds);
+            // Phase 1d-2：地圖定義的 InitialFlags 是一開局就開啟的 BoardFlags；之後的變動
+            // 一律經由 SetBoardFlag/ClearBoardFlag（GameSession 呼叫，會發 BoardFlagChanged）。
+            foreach (var flag in board.InitialFlags) _boardFlags.Add(flag);
             CurrentPlayerId = players[0].Id;
             TurnNumber = 1;
             Phase = TurnPhase.AwaitingRoll;
@@ -290,6 +294,28 @@ namespace Richman.Core
         public bool CanUpgradeOwnedProperty { get; internal set; }
         public IReadOnlyList<string> RouteChoiceTileIds => _routeChoiceTileIdsView;
         public GameOutcome Outcome { get; internal set; }
+
+        // Phase 1d-2（條件邊）：目前開啟的 BoardFlags，由地圖的 InitialFlags 播種，之後
+        // 經由 GameSession.SetBoardFlag/ClearBoardFlag 變動（內部呼叫，Phase 3 Effect 系統
+        // 接手後會是唯一的呼叫端）。HasBoardFlag 是移動解析（GetOpenNextTiles）實際查詢的
+        // 入口，刻意用方法而不是直接暴露 HashSet，避免呼叫端拿到可變集合。
+        public IReadOnlyCollection<string> BoardFlags => _boardFlags;
+        public bool HasBoardFlag(string flag) => !string.IsNullOrEmpty(flag) && _boardFlags.Contains(flag);
+
+        // 回傳值代表「狀態是否真的改變了」（HashSet.Add/Remove 的語意），讓呼叫端
+        // （GameSession.SetBoardFlag/ClearBoardFlag）決定要不要發 BoardFlagChanged——
+        // 重複設定/清除同一個已經是該狀態的 flag 不應該產生雜訊事件。
+        internal bool AddBoardFlag(string flag)
+        {
+            if (string.IsNullOrWhiteSpace(flag)) throw new ArgumentException("A board flag needs a non-empty name.", nameof(flag));
+            return _boardFlags.Add(flag);
+        }
+
+        internal bool RemoveBoardFlag(string flag)
+        {
+            if (string.IsNullOrWhiteSpace(flag)) throw new ArgumentException("A board flag needs a non-empty name.", nameof(flag));
+            return _boardFlags.Remove(flag);
+        }
 
         // ADR-0003 決策3：PendingDecision 是 PendingAction 的投影（見 PendingDecision.cs header
         // 註解的範圍說明），每次存取都即時重算，不是額外儲存的狀態。PendingAction 本身保留

@@ -156,6 +156,9 @@ namespace Richman.Core.Tests
                 case PlayerBankrupt ev: return ev.PlayerId + "|" + ev.CreditorId + "|" + ev.TransferredMoney + "|" + string.Join(",", ev.TransferredPropertyIds);
                 case GameFinished ev: return ev.WinnerId + "|" + ev.FinishedTurnNumber + "|" + ev.Reason;
                 case TurnEnded ev: return ev.PlayerId + "|" + ev.EndedTurnNumber;
+                // Phase 1d-2：條件邊／BoardFlags。
+                case MovementBlocked ev: return ev.PlayerId + "|" + ev.TileIndex + "|" + ev.TileId;
+                case BoardFlagChanged ev: return ev.Flag + "|" + ev.IsSet;
                 default: throw new InvalidOperationException("Unhandled event type in test serializer: " + gameEvent.GetType().Name);
             }
         }

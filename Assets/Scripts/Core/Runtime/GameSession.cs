@@ -105,6 +105,25 @@ namespace Richman.Core
         // 這裡只是 GameSession 對外的便利入口。
         public IReadOnlyList<LegalCommandOption> GetLegalCommands(int playerId) => State.GetLegalCommands(playerId);
 
+        // Phase 1d-2（條件邊）：目前唯一的呼叫端是測試與（未來的）Phase 3 Effect 系統，
+        // 刻意不走 Command/Execute 管線——改變 BoardFlags 本身不是玩家的回合內動作，而是
+        // 地圖規則/事件的副作用，不需要走「命令→驗證→事件」那一套回合制檢查。回傳值是
+        // GameState.AddBoardFlag/RemoveBoardFlag 的「狀態是否真的改變」語意，供呼叫端判斷
+        // 是否真的發生了變化；沒有變化（flag 早已是該狀態）就不會發 BoardFlagChanged。
+        internal bool SetBoardFlag(string flag)
+        {
+            if (!State.AddBoardFlag(flag)) return false;
+            Emit(new BoardFlagChanged(flag, true));
+            return true;
+        }
+
+        internal bool ClearBoardFlag(string flag)
+        {
+            if (!State.RemoveBoardFlag(flag)) return false;
+            Emit(new BoardFlagChanged(flag, false));
+            return true;
+        }
+
         private sealed class CardDeck
         {
             private readonly List<MapCard> _drawPile;
@@ -306,7 +325,21 @@ namespace Richman.Core
             EmitPhase(TurnStage.Move);
             while (State.MovementStepsRemaining > 0)
             {
-                var options = Board.GetNextTiles(player.CurrentTileIndex);
+                // Phase 1d-2（條件邊）：只考慮「現在開著」的邊——RequiredFlag 未滿足的邊
+                // 視為不存在。分岔判斷（是否要停下來等 ChooseRoute）看的是開啟邊數，不是
+                // 宣告邊數：同一格在 flag 開/關時，可能一次只有一條路可走、一次有兩條以上。
+                var options = Board.GetOpenNextTiles(player.CurrentTileIndex, State.HasBoardFlag);
+                if (options.Count == 0)
+                {
+                    // 這一格現在一條開著的出邊都沒有：玩家停在原地，本次移動剩餘步數作廢，
+                    // 讓呼叫端（ExecuteRoll/ExecuteChooseRoute 的「remaining==0 就 ResolveLanding」
+                    // 分支）照常對這一格跑落地解析——跟步數正常走完時走同一條路徑。
+                    var stuck = Board.GetTileAt(player.CurrentTileIndex);
+                    Emit(new MovementBlocked(player.Id, stuck.PositionIndex, stuck.Id));
+                    State.MovementStepsRemaining = 0;
+                    State.SetRouteChoices(null);
+                    return;
+                }
                 if (options.Count > 1)
                 {
                     State.SetRouteChoices(options);
@@ -329,7 +362,11 @@ namespace Richman.Core
             player.MoveTo(destination.PositionIndex);
             State.MovementStepsRemaining--;
             path.Add(destination.PositionIndex);
-            var passedStart = destination.PositionIndex == Board.StartPositionIndex;
+            // Phase 1d-2（通用 pass-through 觸發）：取代舊的
+            // `destination.PositionIndex == Board.StartPositionIndex`。對現有地圖（唯一的
+            // Start 格預設 PassThroughTrigger=GrantStartSalary）這個條件在數學上完全等價，
+            // 只是換了一個不綁死 PositionIndex 的通用判斷方式。
+            var passedStart = destination.PassThroughTrigger == PassThroughTriggerKind.GrantStartSalary;
             Emit(new PawnStepped(player.Id, from, destination.PositionIndex, passedStart));
             if (passedStart)
             {
