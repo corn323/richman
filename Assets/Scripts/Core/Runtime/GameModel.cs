@@ -39,7 +39,8 @@ namespace Richman.Core
             int bonusAmount,
             int completeDistrictRentBonusPercent = 50,
             int completeDistrictReward = 120,
-            int turnLimit = int.MaxValue)
+            int turnLimit = int.MaxValue,
+            int maxTradeProposalsPerTurn = 3)
         {
             if (string.IsNullOrWhiteSpace(gameModeId)) throw new ArgumentException("Game mode id is required.", nameof(gameModeId));
             if (minPlayers < 1) throw new ArgumentOutOfRangeException(nameof(minPlayers));
@@ -51,6 +52,7 @@ namespace Richman.Core
             if (completeDistrictRentBonusPercent < 0) throw new ArgumentOutOfRangeException(nameof(completeDistrictRentBonusPercent));
             if (completeDistrictReward < 0) throw new ArgumentOutOfRangeException(nameof(completeDistrictReward));
             if (turnLimit < 1) throw new ArgumentOutOfRangeException(nameof(turnLimit));
+            if (maxTradeProposalsPerTurn < 1) throw new ArgumentOutOfRangeException(nameof(maxTradeProposalsPerTurn));
 
             GameModeId = gameModeId;
             MinPlayers = minPlayers;
@@ -62,6 +64,7 @@ namespace Richman.Core
             CompleteDistrictRentBonusPercent = completeDistrictRentBonusPercent;
             CompleteDistrictReward = completeDistrictReward;
             TurnLimit = turnLimit;
+            MaxTradeProposalsPerTurn = maxTradeProposalsPerTurn;
         }
 
         public string GameModeId { get; }
@@ -74,6 +77,9 @@ namespace Richman.Core
         public int CompleteDistrictRentBonusPercent { get; }
         public int CompleteDistrictReward { get; }
         public int TurnLimit { get; }
+        // Phase 1e（ADR-0003 決策8）：同一位玩家在同一次輪到自己的回合內，最多能提出幾次
+        // 交易提案（不論最後是被接受、拒絕還是因快照失效而作廢，都算一次）。
+        public int MaxTradeProposalsPerTurn { get; }
 
         public static GameModeConfig ClassicBankruptcyFourPlayer()
         {
@@ -227,6 +233,13 @@ namespace Richman.Core
         {
             UpgradeLevel++;
         }
+
+        // Phase 1e（授權行為變更）：銀行收回破產玩家的地產時呼叫（見 GameSession.
+        // DeclareBankruptcy）——重設回從未被升級過的狀態，而不是讓下一個買家撿到便宜。
+        internal void ResetUpgradeLevel()
+        {
+            UpgradeLevel = 0;
+        }
     }
 
     public sealed class GameOutcome
@@ -247,6 +260,47 @@ namespace Richman.Core
     {
         LastPlayerStanding,
         HighestNetWorthAtTurnLimit
+    }
+
+    // Phase 1e（ADR-0003 決策8 / SEC-CMD-02,03）：兩階段交易的待決提案。由
+    // GameSession.ExecuteProposeTrade 建立，存進 GameState.PendingTradeProposal（一次只允許
+    // 一筆）。*Snapshot 系列欄位是提案當下雙方的資產快照——ExecuteRespondTrade 接受時會
+    // 拿「現在」的值跟這份快照逐一比對，任何一個對不上就視為提案已失效
+    // （TradeProposalExpired，Reason=SnapshotStale），不會执行任何資源異動。
+    public sealed class TradeProposal
+    {
+        internal TradeProposal(
+            int proposalId, int initiatorId, int targetId, int offeredMoney, int requestedMoney,
+            string offeredPropertyId, string requestedPropertyId, int proposedTurnNumber,
+            int initiatorMoneySnapshot, int targetMoneySnapshot,
+            int? offeredPropertyOwnerSnapshot, int? requestedPropertyOwnerSnapshot)
+        {
+            ProposalId = proposalId;
+            InitiatorId = initiatorId;
+            TargetId = targetId;
+            OfferedMoney = offeredMoney;
+            RequestedMoney = requestedMoney;
+            OfferedPropertyId = offeredPropertyId ?? string.Empty;
+            RequestedPropertyId = requestedPropertyId ?? string.Empty;
+            ProposedTurnNumber = proposedTurnNumber;
+            InitiatorMoneySnapshot = initiatorMoneySnapshot;
+            TargetMoneySnapshot = targetMoneySnapshot;
+            OfferedPropertyOwnerSnapshot = offeredPropertyOwnerSnapshot;
+            RequestedPropertyOwnerSnapshot = requestedPropertyOwnerSnapshot;
+        }
+
+        public int ProposalId { get; }
+        public int InitiatorId { get; }
+        public int TargetId { get; }
+        public int OfferedMoney { get; }
+        public int RequestedMoney { get; }
+        public string OfferedPropertyId { get; }
+        public string RequestedPropertyId { get; }
+        public int ProposedTurnNumber { get; }
+        internal int InitiatorMoneySnapshot { get; }
+        internal int TargetMoneySnapshot { get; }
+        internal int? OfferedPropertyOwnerSnapshot { get; }
+        internal int? RequestedPropertyOwnerSnapshot { get; }
     }
 
     public sealed class GameState
@@ -294,6 +348,16 @@ namespace Richman.Core
         public bool CanUpgradeOwnedProperty { get; internal set; }
         public IReadOnlyList<string> RouteChoiceTileIds => _routeChoiceTileIdsView;
         public GameOutcome Outcome { get; internal set; }
+
+        // Phase 1e：目前唯一一筆未決的交易提案（null＝沒有）。刻意不是 PendingDecision——
+        // 提案不阻塞發起方的回合，發起方送出提案後仍能繼續擲骰/升級/結束回合。
+        public TradeProposal PendingTradeProposal { get; private set; }
+        // 目前這一回合（CurrentPlayerId 這一輪）已經提出過幾次交易提案，AdvanceTurn 換人時
+        // 歸零（見 GameSession.AdvanceTurn）。
+        public int TradeProposalsThisTurn { get; internal set; }
+
+        internal void SetPendingTradeProposal(TradeProposal proposal) => PendingTradeProposal = proposal;
+        internal void ClearPendingTradeProposal() => PendingTradeProposal = null;
 
         // Phase 1d-2（條件邊）：目前開啟的 BoardFlags，由地圖的 InitialFlags 播種，之後
         // 經由 GameSession.SetBoardFlag/ClearBoardFlag 變動（內部呼叫，Phase 3 Effect 系統

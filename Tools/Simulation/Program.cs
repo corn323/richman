@@ -322,6 +322,9 @@ namespace Richman.Simulation
             Require(bankrupt.State.GetPlayer(1).Status == PlayerStatus.Bankrupt && bankrupt.State.GetPlayer(2).Status == PlayerStatus.Winner, "bankruptcy and last-player victory");
             Console.WriteLine("CORE_BANKRUPTCY_OK last-player-standing=true");
 
+            // Phase 1e（ADR-0003 決策8，授權行為變更）：兩階段交易。TradeCommand 已移除，
+            // 改成 ProposeTradeCommand 建立 pending proposal（不立刻搬動資源）＋
+            // RespondTradeCommand(accept) 由目標玩家確認才真正執行。
             var trade = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board.Tiles,
                 new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 1), new DiceResult(1, 1)));
             trade.Execute(new RollDiceCommand(1)); trade.Execute(new BuyPropertyCommand(1)); trade.Execute(new EndTurnCommand(1));
@@ -330,16 +333,22 @@ namespace Richman.Simulation
             trade.Execute(new RollDiceCommand(4)); trade.Execute(new EndTurnCommand(4));
             var originalOneMoney = trade.State.GetPlayer(1).Money;
             var originalTwoMoney = trade.State.GetPlayer(2).Money;
-            var rejectedTrade = trade.Execute(new TradeCommand(1, 2, 5000, 0, "singapore-marina"));
-            Require(rejectedTrade.ErrorCode == CommandErrorCode.InsufficientFunds && trade.State.GetPlayer(1).Money == originalOneMoney &&
+            var rejectedPropose = trade.Execute(new ProposeTradeCommand(1, 2, 5000, 0, "singapore-marina"));
+            Require(rejectedPropose.ErrorCode == CommandErrorCode.InsufficientFunds && trade.State.PendingTradeProposal == null &&
+                    trade.State.GetPlayer(1).Money == originalOneMoney &&
                     trade.State.GetPlayer(2).Money == originalTwoMoney && trade.State.GetProperty("singapore-marina").OwnerId == 1,
-                "rejected trade leaves balances and ownership unchanged");
-            var completedTrade = trade.Execute(new TradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
-            Require(completedTrade.Succeeded && trade.State.GetProperty("singapore-marina").OwnerId == 2 &&
+                "rejected trade proposal leaves balances and ownership unchanged");
+            var propose = trade.Execute(new ProposeTradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
+            Require(propose.Succeeded && trade.State.PendingTradeProposal != null &&
+                    trade.State.GetProperty("singapore-marina").OwnerId == 1 && trade.State.GetPlayer(1).Money == originalOneMoney,
+                "proposing a trade does not move any resources until the target responds");
+            var completedTrade = trade.Execute(new RespondTradeCommand(2, trade.State.PendingTradeProposal.ProposalId, true));
+            Require(completedTrade.Succeeded && trade.State.PendingTradeProposal == null &&
+                    trade.State.GetProperty("singapore-marina").OwnerId == 2 &&
                     trade.State.GetProperty("kyoto-gion").OwnerId == 1 && trade.State.GetPlayer(1).Money == originalOneMoney - 10 &&
                     trade.State.GetPlayer(2).Money == originalTwoMoney + 10 && trade.State.CurrentPlayerId == 1,
-                "accepted trade exchanges cash and ownership atomically");
-            Console.WriteLine("CORE_TRADE_OK cash_and_properties=exchanged rejected_trade=atomic turn_preserved=true");
+                "accepted trade proposal exchanges cash and ownership atomically");
+            Console.WriteLine("CORE_TRADE_OK propose_respond=two-stage cash_and_properties=exchanged rejected_trade=atomic turn_preserved=true");
             Console.WriteLine("CORE_VERIFICATION_OK");
         }
 

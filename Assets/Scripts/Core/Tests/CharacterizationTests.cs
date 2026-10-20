@@ -14,13 +14,16 @@ namespace Richman.Core.Tests
     //     本測試僅鎖住現狀，不代表結論。
     public sealed class CharacterizationTests
     {
-        // (a) 已知問題，已於 docs/AUDIT.md §8 決策記錄授權 Phase 1 修復。
-        // GameSession.cs:530-536 DeclareBankruptcy 把地產 OwnerId 設回 creditorId（可能是 null＝銀行收回），
-        // 但從未重設 PropertyState.UpgradeLevel。本測試鎖住「銀行收回後地產仍保留原升級等級」的現狀。
+        // (a) 已於 Phase 1e 修復（docs/AUDIT.md §8 決策記錄授權，授權行為變更②）。
+        // GameSession.cs DeclareBankruptcy 把地產 OwnerId 設回 creditorId（可能是 null＝銀行
+        // 收回）時，creditorId==null（歸還銀行）現在會把 PropertyState.UpgradeLevel 重設為 0；
+        // creditorId 有值（轉給債權玩家）則刻意維持原等級不變（債權人接收完整資產，是刻意
+        // 規則，不是 bug）。本測試原本鎖住「銀行收回後地產仍保留原升級等級」的舊現狀，
+        // Phase 1e 反轉為「銀行收回後等級歸零」。
         //
         // 棋盤（4 格閉環）：0=start, 1=rest, 2=property(p1), 3=tax(金額 2000，遠超雙方身家)。
         [Test]
-        public void KnownIssue_BankForeclosurePreservesUpgradeLevelInsteadOfResetting()
+        public void Fixed_BankForeclosureResetsUpgradeLevelToZero()
         {
             var mode = new GameModeConfig("t4-bankruptcy-upgrade", 2, 2, 2000, 0, 0, 0);
             var board = new BoardDefinition(new[]
@@ -63,18 +66,21 @@ namespace Richman.Core.Tests
             Assert.That(session.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Bankrupt));
             Assert.That(session.State.GetProperty("p1").OwnerId, Is.Null,
                 "Bank foreclosure should clear ownership.");
-            Assert.That(session.State.GetProperty("p1").UpgradeLevel, Is.EqualTo(1),
-                "已知問題：目前銀行收回地產時並未重設 UpgradeLevel（GameSession.cs:530-536）。" +
-                "若 Phase 1 修復此問題（docs/AUDIT.md §8 已授權），請把這個期望值改為 0，並在 PR 中說明這是刻意行為變更。");
+            Assert.That(session.State.GetProperty("p1").UpgradeLevel, Is.EqualTo(0),
+                "Phase 1e 行為變更：銀行收回地產時重設 UpgradeLevel（GameSession.DeclareBankruptcy，" +
+                "docs/AUDIT.md §8 已授權）。下一個買家不應該撿到已經升級好的資產。");
         }
 
-        // (b) 已知問題，已於 docs/AUDIT.md §8 決策記錄授權 Phase 1 修復（ADR-0003 決策 8 / SEC-CMD-02）。
-        // GameSession.cs:321-357 ExecuteTrade 只驗證發起方自身的資源與目標玩家狀態，
-        // 從未要求目標玩家同意。本測試示範一次 $0 交易即可片面拿走對方地產。
+        // (b) 已於 Phase 1e 修復（docs/AUDIT.md §8 決策記錄授權，ADR-0003 決策8 / SEC-CMD-02,03，
+        // 授權行為變更①：兩階段交易）。GameSession 舊版 ExecuteTrade 只驗證發起方自身的資源
+        // 與目標玩家狀態，從未要求目標玩家同意；本測試原本示範一次 $0 交易即可片面拿走
+        // 對方地產。Phase 1e 改為 ProposeTradeCommand/RespondTradeCommand 兩階段：提出不會
+        // 立刻搬動任何資源，目標玩家明確拒絕（RespondTradeCommand(accept:false)）時地產
+        // 保留在原持有人身上——反轉原本「單方面 $0 交易即可生效」的現狀。
         //
         // 棋盤（2 格閉環）：0=start, 1=property("target-property")。
         [Test]
-        public void KnownIssue_TradeExecutesWithoutTargetPlayerConsentEvenForZeroCostPropertyTransfer()
+        public void Fixed_ZeroCostTradeProposalRequiresTargetPlayerConsentAndCanBeRejected()
         {
             var mode = new GameModeConfig("t4-trade-consent", 2, 2, 1000, 0, 0, 0);
             var board = new BoardDefinition(new[]
@@ -97,13 +103,23 @@ namespace Richman.Core.Tests
             var player1MoneyBefore = session.State.GetPlayer(1).Money;
             var player2MoneyBefore = session.State.GetPlayer(2).Money;
 
-            var zeroCostTheft = session.Execute(new TradeCommand(1, 2, 0, 0, null, "target-property"));
+            var propose = session.Execute(new ProposeTradeCommand(1, 2, 0, 0, null, "target-property"));
 
-            Assert.That(zeroCostTheft.Succeeded, Is.True,
-                "已知問題：Core 目前允許單方面以 $0 交易拿走對方地產，完全未要求目標玩家回應/同意（GameSession.cs:321-357）。" +
-                "ADR-0003 決策 8 已規劃改為 ProposeTrade/RespondTrade 兩階段，Phase 1 修復後本測試應改為驗證" +
-                "「未經 RespondTrade 確認前，提案不得生效」，而不是繼續斷言單階段交易成功。");
-            Assert.That(session.State.GetProperty("target-property").OwnerId, Is.EqualTo(1));
+            Assert.That(propose.Succeeded, Is.True);
+            Assert.That(session.State.PendingTradeProposal, Is.Not.Null);
+            // 提出後、目標玩家尚未回應前，地產所有權與雙方現金都不應該被動到。
+            Assert.That(session.State.GetProperty("target-property").OwnerId, Is.EqualTo(2));
+            Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(player1MoneyBefore));
+            Assert.That(session.State.GetPlayer(2).Money, Is.EqualTo(player2MoneyBefore));
+
+            var proposalId = session.State.PendingTradeProposal.ProposalId;
+            var reject = session.Execute(new RespondTradeCommand(2, proposalId, false));
+
+            Assert.That(reject.Succeeded, Is.True,
+                "Phase 1e 行為變更：目標玩家可以明確拒絕一筆對自己不利（甚至是 $0）的交易提案。");
+            Assert.That(session.State.PendingTradeProposal, Is.Null);
+            Assert.That(session.State.GetProperty("target-property").OwnerId, Is.EqualTo(2),
+                "拒絕後地產應該留在原持有人手上，不會被片面拿走。");
             Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(player1MoneyBefore));
             Assert.That(session.State.GetPlayer(2).Money, Is.EqualTo(player2MoneyBefore));
         }

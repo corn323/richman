@@ -66,9 +66,15 @@ namespace Richman.Core
         public EndTurnCommand(int playerId) : base(playerId) { }
     }
 
-    public sealed class TradeCommand : GameCommand
+    // Phase 1e（ADR-0003 決策8 / SEC-CMD-02,03，授權行為變更）：取代單階段 TradeCommand。
+    // 發起方只能「提出」交易——驗證通過後建立 pending proposal 並拍下雙方資產快照，
+    // 不會立刻搬動任何金錢或地產。真正的資源異動只發生在目標玩家送出
+    // RespondTradeCommand(accept:true) 且快照仍然吻合的那一刻（GameSession.
+    // ExecuteRespondTrade）。不進入 PendingDecision（不阻塞發起方回合，發起方送出提案後
+    // 仍可繼續行動）。
+    public sealed class ProposeTradeCommand : GameCommand
     {
-        public TradeCommand(int playerId, int targetPlayerId, int offeredMoney, int requestedMoney,
+        public ProposeTradeCommand(int playerId, int targetPlayerId, int offeredMoney, int requestedMoney,
             string offeredPropertyId = null, string requestedPropertyId = null) : base(playerId)
         {
             if (targetPlayerId <= 0) throw new ArgumentOutOfRangeException(nameof(targetPlayerId));
@@ -88,6 +94,21 @@ namespace Richman.Core
         public string RequestedPropertyId { get; }
     }
 
+    // Phase 1e：只有 GameState.PendingTradeProposal.TargetId == playerId 才能送出這個命令
+    // （不要求 playerId 是目前的 CurrentPlayerId——目標玩家回應交易時，回合通常輪不到他）。
+    public sealed class RespondTradeCommand : GameCommand
+    {
+        public RespondTradeCommand(int playerId, int proposalId, bool accept) : base(playerId)
+        {
+            if (proposalId <= 0) throw new ArgumentOutOfRangeException(nameof(proposalId));
+            ProposalId = proposalId;
+            Accept = accept;
+        }
+
+        public int ProposalId { get; }
+        public bool Accept { get; }
+    }
+
     public enum CommandErrorCode
     {
         None,
@@ -104,7 +125,15 @@ namespace Richman.Core
         InvalidTrade,
         // ADR-0003 決策3：ResolveDecisionCommand 的 optionId 與目前 GameState.PendingDecision
         // 不符時使用。純新增，不影響既有錯誤碼的數值或既有分支。
-        InvalidDecisionOption
+        InvalidDecisionOption,
+        // Phase 1e（兩階段交易）：純新增，不影響既有錯誤碼的數值或既有分支。
+        // 注意：快照過期（ExecuteRespondTrade 的 SnapshotStale 分支）不是這裡的任何一個
+        // 值——那個分支回傳 CommandResult.Success()，呼叫端用 result.Events 裡有沒有
+        // TradeProposalExpired 事件來分辨，詳見 GameSession.ExecuteRespondTrade 的註解。
+        TradeProposalAlreadyPending,
+        TradeProposalLimitReached,
+        TradeProposalNotFound,
+        NotTradeProposalTarget
     }
 
     public sealed class CommandResult

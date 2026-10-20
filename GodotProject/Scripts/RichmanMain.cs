@@ -40,7 +40,7 @@ namespace Richman.GodotPresentation
             _camera.FocusOverview();
             _hud = new GodotGameplayHud { Name = "GameplayHUD" };
             AddChild(_hud);
-            _hud.Build(StartGame, PreviewCharacter, Roll, Buy, Upgrade, EndTurn, ChooseRoute, Trade);
+            _hud.Build(StartGame, PreviewCharacter, Roll, Buy, Upgrade, EndTurn, ChooseRoute, ProposeTrade, RespondTrade);
             if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--test-pawn-move") >= 0)
                 _ = RunPawnMoveSmoke();
         }
@@ -205,7 +205,18 @@ namespace Richman.GodotPresentation
             _camera.Focus(_board.GetPawn(_session.State.CurrentPlayerId).GlobalPosition, 12f);
         }
 
-        private void Trade(TradeCommand command)
+        // Phase 1e（兩階段交易）：取代單階段 Trade(TradeCommand)。ProposeTrade 由發起方按下
+        // 「提出交易」時立刻送出；RespondTrade 由目標玩家按下確認（accept）或取消（reject）
+        // 時送出（熱座模式下同一個裝置代表雙方，見 GodotGameplayHud.ConfirmTradeResponse）。
+        private void ProposeTrade(ProposeTradeCommand command)
+        {
+            if (_busy || _session.State.Outcome != null) return;
+            var result = _session.Execute(command);
+            _board.ApplyState(_session.State);
+            _hud.Render(_session.State, result.Succeeded ? _session.State.LastEventMessage : result.ErrorMessage, false);
+        }
+
+        private void RespondTrade(RespondTradeCommand command)
         {
             if (_busy || _session.State.Outcome != null) return;
             var result = _session.Execute(command);

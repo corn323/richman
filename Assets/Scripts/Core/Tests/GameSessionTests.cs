@@ -22,8 +22,10 @@ namespace Richman.Core.Tests
             Assert.That(session.Board.GetTileAt(1).PurchasePrice, Is.EqualTo(140));
         }
 
+        // Phase 1e（ADR-0003 決策8，授權行為變更）：兩階段交易——提出之後資產不會立刻異動，
+        // 要等目標玩家送出 RespondTradeCommand(accept:true) 才會原子執行。
         [Test]
-        public void TradeExchangesMoneyAndPropertiesAtomicallyBetweenActivePlayers()
+        public void TradeExchangesMoneyAndPropertiesAtomicallyOnlyAfterTheTargetAccepts()
         {
             var session = CreateSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create().Tiles,
                 new ScriptedDiceRoller(new DiceResult(1, 1), new DiceResult(2, 3), new DiceResult(1, 1), new DiceResult(1, 1)));
@@ -42,15 +44,24 @@ namespace Richman.Core.Tests
             var playerTwo = session.State.GetPlayer(2);
             var originalOneMoney = playerOne.Money;
             var originalTwoMoney = playerTwo.Money;
-            var rejected = session.Execute(new TradeCommand(1, 2, 5000, 0, "singapore-marina"));
-            Assert.That(rejected.ErrorCode, Is.EqualTo(CommandErrorCode.InsufficientFunds));
+            var rejectedPropose = session.Execute(new ProposeTradeCommand(1, 2, 5000, 0, "singapore-marina"));
+            Assert.That(rejectedPropose.ErrorCode, Is.EqualTo(CommandErrorCode.InsufficientFunds));
+            Assert.That(session.State.PendingTradeProposal, Is.Null);
             Assert.That(playerOne.Money, Is.EqualTo(originalOneMoney));
             Assert.That(playerTwo.Money, Is.EqualTo(originalTwoMoney));
             Assert.That(session.State.GetProperty("singapore-marina").OwnerId, Is.EqualTo(1));
 
-            var trade = session.Execute(new TradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
+            var propose = session.Execute(new ProposeTradeCommand(1, 2, 20, 10, "singapore-marina", "kyoto-gion"));
+            Assert.That(propose.Succeeded, Is.True);
+            // 提出交易不會立刻搬動任何資源，也不阻塞發起方的回合。
+            Assert.That(session.State.GetProperty("singapore-marina").OwnerId, Is.EqualTo(1));
+            Assert.That(playerOne.Money, Is.EqualTo(originalOneMoney));
+            var proposalId = session.State.PendingTradeProposal.ProposalId;
+
+            var trade = session.Execute(new RespondTradeCommand(2, proposalId, true));
 
             Assert.That(trade.Succeeded, Is.True);
+            Assert.That(session.State.PendingTradeProposal, Is.Null);
             Assert.That(session.State.GetProperty("singapore-marina").OwnerId, Is.EqualTo(2));
             Assert.That(session.State.GetProperty("kyoto-gion").OwnerId, Is.EqualTo(1));
             Assert.That(playerOne.Money, Is.EqualTo(originalOneMoney - 10));

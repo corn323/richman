@@ -42,6 +42,10 @@ namespace Richman.Core
         private readonly ReadOnlyCollection<GameEvent> _eventLogView;
         private int _nextEventSequence = 1;
         private List<GameEvent> _callEvents;
+        // Phase 1e（兩階段交易）：提案 id 全域單調遞增（貫穿整場對局，跟 _nextEventSequence
+        // 同一套精神），讓 RespondTradeCommand.ProposalId 永遠對應到唯一一筆提案，不會跟
+        // 同一局內更早、已經被回應/過期的提案搞混。
+        private int _nextTradeProposalId = 1;
 
         // IRng 強制注入（ADR-0003 決策5 / docs/AUDIT.md Blocker B1）：random 不再有預設值、
         // 不再 fallback 到 Environment.TickCount。呼叫端必須明確決定並記錄 seed 的來源，
@@ -187,7 +191,8 @@ namespace Richman.Core
             else if (command is UpgradePropertyCommand upgrade) result = ExecuteUpgrade(player, upgrade);
             else if (command is ChooseRouteCommand chooseRoute) result = ExecuteChooseRoute(player, chooseRoute);
             else if (command is ResolveDecisionCommand resolveDecision) result = ExecuteResolveDecision(player, resolveDecision);
-            else if (command is TradeCommand trade) result = ExecuteTrade(player, trade);
+            else if (command is ProposeTradeCommand proposeTrade) result = ExecuteProposeTrade(player, proposeTrade);
+            else if (command is RespondTradeCommand respondTrade) result = ExecuteRespondTrade(player, respondTrade);
             else if (command is EndTurnCommand) result = ExecuteEndTurn(player);
             else result = CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
 
@@ -420,12 +425,20 @@ namespace Richman.Core
             return CommandResult.Success();
         }
 
-        private CommandResult ExecuteTrade(PlayerState player, TradeCommand command)
+        // Phase 1e（ADR-0003 決策8 / SEC-CMD-02,03，授權行為變更）：兩階段交易的第一階段。
+        // 驗證通過後只建立 pending proposal（拍下雙方資產快照），不搬動任何金錢或地產——
+        // 真正的異動留給 ExecuteRespondTrade。驗證邏輯跟舊版單階段 TradeCommand 完全相同
+        // （逐條照搬），只是驗證通過後的結果從「立刻執行」改成「記錄一筆提案」。
+        private CommandResult ExecuteProposeTrade(PlayerState player, ProposeTradeCommand command)
         {
             var turnCheck = ValidateCurrentPlayer(player);
             if (turnCheck != null) return turnCheck;
             if (State.Phase == TurnPhase.Finished || State.Phase == TurnPhase.AwaitingAction && State.PendingAction == PendingAction.ChooseRoute)
-                return CommandResult.Failure(CommandErrorCode.InvalidPhase, "Finish the required movement choice before trading.");
+                return CommandResult.Failure(CommandErrorCode.InvalidPhase, "Finish the required movement choice before proposing a trade.");
+            if (State.PendingTradeProposal != null)
+                return CommandResult.Failure(CommandErrorCode.TradeProposalAlreadyPending, "Only one trade proposal can be pending at a time.");
+            if (State.TradeProposalsThisTurn >= Mode.MaxTradeProposalsPerTurn)
+                return CommandResult.Failure(CommandErrorCode.TradeProposalLimitReached, "This turn has already reached its trade proposal limit.");
 
             var target = State.GetPlayer(command.TargetPlayerId);
             if (target == null || target.Id == player.Id || target.Status != PlayerStatus.Active)
@@ -448,28 +461,83 @@ namespace Richman.Core
             if (command.OfferedMoney == 0 && command.RequestedMoney == 0 && offeredProperty == null && requestedProperty == null)
                 return CommandResult.Failure(CommandErrorCode.InvalidTrade, "A trade must exchange money or property.");
 
-            player.Spend(command.OfferedMoney);
-            target.Spend(command.RequestedMoney);
-            player.AddMoney(command.RequestedMoney);
-            target.AddMoney(command.OfferedMoney);
-            if (offeredProperty != null) offeredProperty.SetOwner(target.Id);
-            if (requestedProperty != null) requestedProperty.SetOwner(player.Id);
+            var proposal = new TradeProposal(_nextTradeProposalId++, player.Id, target.Id, command.OfferedMoney, command.RequestedMoney,
+                command.OfferedPropertyId, command.RequestedPropertyId, State.TurnNumber,
+                player.Money, target.Money, offeredProperty?.OwnerId, requestedProperty?.OwnerId);
+            State.SetPendingTradeProposal(proposal);
+            State.TradeProposalsThisTurn++;
+            Emit(new TradeProposed(proposal.ProposalId, player.Id, target.Id, command.OfferedMoney, command.RequestedMoney,
+                command.OfferedPropertyId, command.RequestedPropertyId));
+            State.LastEventMessage = player.DisplayName + " 向 " + target.DisplayName + " 提出交易，等待回應。";
+            return CommandResult.Success();
+        }
+
+        // Phase 1e：第二階段。只有提案的 TargetId 能回應（刻意不呼叫 ValidateCurrentPlayer——
+        // 目標玩家回應時通常不是目前輪到的玩家）。accept=false 一定成功（拒絕不需要資產
+        // 仍然有效）；accept=true 會先把「現在」的雙方資產狀態跟提案當下的快照逐一比對。
+        // 快照過期的分支刻意回傳 CommandResult.Success()（不是 Failure）：這個 RespondTrade
+        // 命令本身是合法、有效處理的（目標玩家、proposalId 都對），只是處理結果是「提案
+        // 已過期」而不是「交易成立」——跟 ExecuteRoll 讓玩家破產也回傳 Success 是同一個
+        // 道理（CommandResult.Succeeded 代表命令有被妥善處理，不代表玩家喜歡這個結果）。
+        // 用 Failure 會違反既有的「失敗命令零事件、零狀態變化」慣例（CommandResult.Events
+        // 的 XML 文件），因為這裡確實有清掉 pending proposal、確實發了 TradeProposalExpired。
+        // 呼叫端要分辨「交易成立」還是「提案過期」，看 result.Events 裡是哪一種事件
+        // （TradeExecuted vs TradeProposalExpired），而不是看 Succeeded/ErrorCode。
+        private CommandResult ExecuteRespondTrade(PlayerState player, RespondTradeCommand command)
+        {
+            var proposal = State.PendingTradeProposal;
+            if (proposal == null || proposal.ProposalId != command.ProposalId)
+                return CommandResult.Failure(CommandErrorCode.TradeProposalNotFound, "There is no matching trade proposal to respond to.");
+            if (player.Id != proposal.TargetId)
+                return CommandResult.Failure(CommandErrorCode.NotTradeProposalTarget, "Only the proposal's target player can respond to it.");
+
+            if (!command.Accept)
+            {
+                State.ClearPendingTradeProposal();
+                Emit(new TradeRejected(proposal.ProposalId, proposal.InitiatorId, proposal.TargetId));
+                State.LastEventMessage = "交易提案被拒絕。";
+                return CommandResult.Success();
+            }
+
+            var initiator = State.GetPlayer(proposal.InitiatorId);
+            var offeredProperty = string.IsNullOrEmpty(proposal.OfferedPropertyId) ? null : State.GetProperty(proposal.OfferedPropertyId);
+            var requestedProperty = string.IsNullOrEmpty(proposal.RequestedPropertyId) ? null : State.GetProperty(proposal.RequestedPropertyId);
+            var snapshotStillMatches = initiator != null && initiator.Status == PlayerStatus.Active &&
+                initiator.Money == proposal.InitiatorMoneySnapshot &&
+                player.Money == proposal.TargetMoneySnapshot &&
+                (offeredProperty?.OwnerId) == proposal.OfferedPropertyOwnerSnapshot &&
+                (requestedProperty?.OwnerId) == proposal.RequestedPropertyOwnerSnapshot;
+            if (!snapshotStillMatches)
+            {
+                State.ClearPendingTradeProposal();
+                Emit(new TradeProposalExpired(proposal.ProposalId, proposal.InitiatorId, proposal.TargetId, TradeProposalExpiryReason.SnapshotStale));
+                State.LastEventMessage = "交易提案已失效（雙方資產狀態已變動）。";
+                return CommandResult.Success();
+            }
+
+            initiator.Spend(proposal.OfferedMoney);
+            player.Spend(proposal.RequestedMoney);
+            initiator.AddMoney(proposal.RequestedMoney);
+            player.AddMoney(proposal.OfferedMoney);
+            if (offeredProperty != null) offeredProperty.SetOwner(player.Id);
+            if (requestedProperty != null) requestedProperty.SetOwner(initiator.Id);
             // 注意：四筆金額異動（兩邊的 Spend/AddMoney）在上面已經一次做完（行為不變），
             // 所以下面 MoneyChanged.NewBalance 反映的是交易「全部完成後」的最終餘額，而不是
             // 每一步的中繼餘額——兩個方向都有金額時，同一位玩家的兩筆事件會看到同一個
             // NewBalance。這是刻意的簡化（批次套用、批次回報），不影響 Delta 欄位的正確性。
-            if (command.OfferedMoney > 0)
+            if (proposal.OfferedMoney > 0)
             {
-                Emit(new MoneyChanged(player.Id, -command.OfferedMoney, player.Money, MoneyChangeReason.TradeOffered));
-                Emit(new MoneyChanged(target.Id, command.OfferedMoney, target.Money, MoneyChangeReason.TradeReceived));
+                Emit(new MoneyChanged(initiator.Id, -proposal.OfferedMoney, initiator.Money, MoneyChangeReason.TradeOffered));
+                Emit(new MoneyChanged(player.Id, proposal.OfferedMoney, player.Money, MoneyChangeReason.TradeReceived));
             }
-            if (command.RequestedMoney > 0)
+            if (proposal.RequestedMoney > 0)
             {
-                Emit(new MoneyChanged(target.Id, -command.RequestedMoney, target.Money, MoneyChangeReason.TradeOffered));
-                Emit(new MoneyChanged(player.Id, command.RequestedMoney, player.Money, MoneyChangeReason.TradeReceived));
+                Emit(new MoneyChanged(player.Id, -proposal.RequestedMoney, player.Money, MoneyChangeReason.TradeOffered));
+                Emit(new MoneyChanged(initiator.Id, proposal.RequestedMoney, initiator.Money, MoneyChangeReason.TradeReceived));
             }
-            Emit(new TradeExecuted(player.Id, target.Id, command.OfferedMoney, command.RequestedMoney, command.OfferedPropertyId, command.RequestedPropertyId));
-            State.LastEventMessage = player.DisplayName + " 與 " + target.DisplayName + " 完成交易。";
+            Emit(new TradeExecuted(initiator.Id, player.Id, proposal.OfferedMoney, proposal.RequestedMoney, proposal.OfferedPropertyId, proposal.RequestedPropertyId));
+            State.ClearPendingTradeProposal();
+            State.LastEventMessage = initiator.DisplayName + " 與 " + player.DisplayName + " 完成交易。";
             return CommandResult.Success();
         }
 
@@ -719,6 +787,11 @@ namespace Richman.Core
                 {
                     (transferredPropertyIds ??= new List<string>()).Add(properties[i].PropertyId);
                     properties[i].SetOwner(creditorId);
+                    // Phase 1e（授權行為變更）：歸還銀行（creditorId==null）時重設升級等級——
+                    // 銀行收回視為「這塊地產回到起點」，下一個買家不應該撿到已經升級好的資產。
+                    // 轉給債權玩家（creditorId 有值）則刻意維持現狀：債權人是在這筆債務清償中
+                    // 接收地產，視為「接收完整資產」，不重設等級——這是刻意規則，不是 bug。
+                    if (creditorId == null) properties[i].ResetUpgradeLevel();
                 }
             }
 
@@ -754,6 +827,16 @@ namespace Richman.Core
         private void AdvanceTurn()
         {
             if (State.Phase == TurnPhase.Finished) return;
+            // Phase 1e（兩階段交易）：提案者（永遠是這個正在結束的回合的 CurrentPlayerId——
+            // ProposeTradeCommand 要求 ValidateCurrentPlayer）的回合結束時，任何還沒被回應的
+            // 提案即刻失效。SimpleBotStrategy 從不提案，所以 Bot 對局裡
+            // State.PendingTradeProposal 永遠是 null，這個分支對黃金雜湊零影響。
+            if (State.PendingTradeProposal != null)
+            {
+                var expiring = State.PendingTradeProposal;
+                State.ClearPendingTradeProposal();
+                Emit(new TradeProposalExpired(expiring.ProposalId, expiring.InitiatorId, expiring.TargetId, TradeProposalExpiryReason.TurnEnded));
+            }
             EmitPhase(TurnStage.TurnEnd);
             Emit(new TurnEnded(State.CurrentPlayerId, State.TurnNumber));
             State.CanUpgradeOwnedProperty = false;
@@ -784,6 +867,7 @@ namespace Richman.Core
                     State.TurnNumber++;
                     State.Phase = TurnPhase.AwaitingRoll;
                     State.PendingAction = PendingAction.None;
+                    State.TradeProposalsThisTurn = 0;
                     EmitPhase(TurnStage.TurnStart);
                     Emit(new TurnStarted(State.TurnNumber, candidate.Id));
                     return;

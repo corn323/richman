@@ -281,6 +281,52 @@ namespace Richman.Core.Events
         public string RequestedPropertyId { get; }
     }
 
+    // Phase 1e（ADR-0003 決策8 / SEC-CMD-02,03，授權行為變更）：兩階段交易。
+    public enum TradeProposalExpiryReason
+    {
+        // ExecuteRespondTrade(accept:true) 時，雙方資產快照跟提案當下對不上。
+        SnapshotStale,
+        // 發起方的回合結束（AdvanceTurn）了，提案還沒被回應。
+        TurnEnded
+    }
+
+    public sealed class TradeProposed : GameEvent
+    {
+        public TradeProposed(int proposalId, int initiatorId, int targetId, int offeredMoney, int requestedMoney,
+            string offeredPropertyId, string requestedPropertyId)
+        {
+            ProposalId = proposalId; InitiatorId = initiatorId; TargetId = targetId;
+            OfferedMoney = offeredMoney; RequestedMoney = requestedMoney;
+            OfferedPropertyId = offeredPropertyId ?? string.Empty; RequestedPropertyId = requestedPropertyId ?? string.Empty;
+        }
+        public int ProposalId { get; }
+        public int InitiatorId { get; }
+        public int TargetId { get; }
+        public int OfferedMoney { get; }
+        public int RequestedMoney { get; }
+        public string OfferedPropertyId { get; }
+        public string RequestedPropertyId { get; }
+    }
+
+    public sealed class TradeRejected : GameEvent
+    {
+        public TradeRejected(int proposalId, int initiatorId, int targetId)
+        { ProposalId = proposalId; InitiatorId = initiatorId; TargetId = targetId; }
+        public int ProposalId { get; }
+        public int InitiatorId { get; }
+        public int TargetId { get; }
+    }
+
+    public sealed class TradeProposalExpired : GameEvent
+    {
+        public TradeProposalExpired(int proposalId, int initiatorId, int targetId, TradeProposalExpiryReason reason)
+        { ProposalId = proposalId; InitiatorId = initiatorId; TargetId = targetId; Reason = reason; }
+        public int ProposalId { get; }
+        public int InitiatorId { get; }
+        public int TargetId { get; }
+        public TradeProposalExpiryReason Reason { get; }
+    }
+
     public sealed class DecisionRequested : GameEvent
     {
         public DecisionRequested(DecisionKind kind, int playerId, IReadOnlyList<string> optionIds, string contextTileId)

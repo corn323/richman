@@ -28,7 +28,11 @@ namespace Richman.GodotPresentation
         private Button _endTurn;
         private PanelContainer _bottom;
         private VBoxContainer _decision;
-        private Action<TradeCommand> _onTrade;
+        // Phase 1e（兩階段交易）：取代單階段 Action<TradeCommand>。_onProposeTrade 對應
+        // ProposeTradeCommand（發起方送出，不立刻搬動資源）；_onRespondTrade 對應
+        // RespondTradeCommand（目標玩家確認或拒絕）。
+        private Action<ProposeTradeCommand> _onProposeTrade;
+        private Action<RespondTradeCommand> _onRespondTrade;
         private Action _onStart;
         private Action _onRoll;
         private Action _onBuy;
@@ -41,10 +45,12 @@ namespace Richman.GodotPresentation
         private Action<int, int, Color> _onPreviewCharacter;
 
         public void Build(Action onStart, Action<int, int, Color> onPreviewCharacter, Action onRoll, Action onBuy,
-            Action<string> onUpgrade, Action onEndTurn, Action<string> onChooseRoute, Action<TradeCommand> onTrade)
+            Action<string> onUpgrade, Action onEndTurn, Action<string> onChooseRoute,
+            Action<ProposeTradeCommand> onProposeTrade, Action<RespondTradeCommand> onRespondTrade)
         {
             _onStart = onStart; _onPreviewCharacter = onPreviewCharacter; _onRoll = onRoll; _onBuy = onBuy;
-            _onUpgrade = onUpgrade; _onEndTurn = onEndTurn; _onChooseRoute = onChooseRoute; _onTrade = onTrade;
+            _onUpgrade = onUpgrade; _onEndTurn = onEndTurn; _onChooseRoute = onChooseRoute;
+            _onProposeTrade = onProposeTrade; _onRespondTrade = onRespondTrade;
             var theme = MakeTheme();
             _setup = new CenterContainer { Name = "SetupScreen", AnchorRight = 1, AnchorBottom = 1 };
             var setupPanel = new PanelContainer { CustomMinimumSize = new Vector2(760, 0), Theme = theme };
@@ -247,6 +253,23 @@ namespace Richman.GodotPresentation
             _bottom.AnchorTop = .69f;
         }
 
+        // Phase 1e（兩階段交易）：跟 Confirm 外觀一模一樣（標題 + 確認/取消兩個按鈕，文字不
+        // 變），差別只在兩個按鈕都送出 RespondTradeCommand——這裡已經有一筆真正待決的
+        // proposal（Propose 已經送出去了），「取消」在這個情境下代表「目標玩家拒絕」，
+        // 不能像 Confirm 的「取消」那樣只是單純重新畫面、什麼命令都不送。
+        private void ConfirmTradeResponse(string message, int targetPlayerId, int proposalId, string confirmText)
+        {
+            ClearDecision();
+            _roll.Disabled = true; _buy.Disabled = true; _trade.Disabled = true; _endTurn.Disabled = true;
+            AddDecisionTitle(message);
+            var row = new HBoxContainer { Theme = MakeTheme() };
+            var confirm = Button(confirmText, () => _onRespondTrade?.Invoke(new RespondTradeCommand(targetPlayerId, proposalId, true)));
+            confirm.Disabled = _lastBusy;
+            var cancel = Button("取消", () => _onRespondTrade?.Invoke(new RespondTradeCommand(targetPlayerId, proposalId, false)));
+            row.AddChild(confirm); row.AddChild(cancel); _decision.AddChild(row);
+            _bottom.AnchorTop = .69f;
+        }
+
         private void ShowTradeForm()
         {
             if (_lastState == null || _lastBusy) return;
@@ -283,8 +306,14 @@ namespace Richman.GodotPresentation
                 var offeredTile = string.IsNullOrEmpty(offerId) ? null : state.Board.GetProperty(offerId);
                 var requestedTile = string.IsNullOrEmpty(requestId) ? null : state.Board.GetProperty(requestId);
                 var description = "玩家 " + current.Id + " 提出：" + (string.IsNullOrEmpty(offerId) ? "" : (offeredTile?.DisplayName ?? offerId) + "、") + "支付 $" + (int)offeredMoney.Value + "；玩家 " + targetId + " 提供：" + (string.IsNullOrEmpty(requestId) ? "" : (requestedTile?.DisplayName ?? requestId) + "、") + "支付 $" + (int)requestedMoney.Value + "。\n請雙方閱讀後共同確認。";
-                var trade = new TradeCommand(current.Id, targetId, (int)offeredMoney.Value, (int)requestedMoney.Value, offerId, requestId);
-                Confirm(description, () => _onTrade?.Invoke(trade), "雙方確認交易");
+                // Phase 1e（兩階段交易）：按下「提出交易」就立刻送出 ProposeTradeCommand
+                // （不等確認——提案本身不搬動任何資源，也不阻塞發起方回合）。_onProposeTrade
+                // 內部會呼叫 Render(_session.State, ...)，執行完成後 _lastState 已經是
+                // 最新狀態，PendingTradeProposal 就是剛剛這筆提案，可以直接取 ProposalId。
+                var proposal = new ProposeTradeCommand(current.Id, targetId, (int)offeredMoney.Value, (int)requestedMoney.Value, offerId, requestId);
+                _onProposeTrade?.Invoke(proposal);
+                var proposalId = _lastState?.PendingTradeProposal?.ProposalId ?? -1;
+                ConfirmTradeResponse(description, targetId, proposalId, "雙方確認交易");
             });
             terms.AddChild(propose);
             terms.AddChild(Button("取消", () => Render(state, _lastMessage, false)));

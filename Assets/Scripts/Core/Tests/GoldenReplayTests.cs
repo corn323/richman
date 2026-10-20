@@ -159,6 +159,10 @@ namespace Richman.Core.Tests
                 // Phase 1d-2：條件邊／BoardFlags。
                 case MovementBlocked ev: return ev.PlayerId + "|" + ev.TileIndex + "|" + ev.TileId;
                 case BoardFlagChanged ev: return ev.Flag + "|" + ev.IsSet;
+                // Phase 1e：兩階段交易。
+                case TradeProposed ev: return ev.ProposalId + "|" + ev.InitiatorId + "|" + ev.TargetId + "|" + ev.OfferedMoney + "|" + ev.RequestedMoney + "|" + ev.OfferedPropertyId + "|" + ev.RequestedPropertyId;
+                case TradeRejected ev: return ev.ProposalId + "|" + ev.InitiatorId + "|" + ev.TargetId;
+                case TradeProposalExpired ev: return ev.ProposalId + "|" + ev.InitiatorId + "|" + ev.TargetId + "|" + ev.Reason;
                 default: throw new InvalidOperationException("Unhandled event type in test serializer: " + gameEvent.GetType().Name);
             }
         }
