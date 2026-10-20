@@ -1,0 +1,4 @@
+interface:
+  display_name: "Game Presentation"
+  short_description: "從世界構圖、HUD、素材一致性與操作回饋，改善遊戲的實際遊玩畫面"
+  default_prompt: "Use $game-presentation to improve this game's world composition, interface and interaction feedback while preserving its existing architecture."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "User Experience"
+  short_description: "設計或修正使用流程、表單、狀態回饋、命令列與錯誤恢復"
+  default_prompt: "請使用 $user-experience 處理這項工作，依實際問題只讀需要的參考。"

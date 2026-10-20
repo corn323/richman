@@ -1,0 +1,4 @@
+interface:
+  display_name: "Careful Coding"
+  short_description: "程式修改或 review 的定位與驗證指引；需求有歧義、跨模組或修 bug 時使用"
+  default_prompt: "請使用 $careful-coding 處理這項工作，依實際問題只讀需要的參考。"

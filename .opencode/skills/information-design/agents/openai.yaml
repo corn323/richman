@@ -1,0 +1,7 @@
+interface:
+  display_name: "Information Design"
+  short_description: "組織網站、工具介面、文件、簡報或 agent 指引的內容分組與閱讀順序"
+  default_prompt: "請使用 $information-design 處理這項工作，依實際問題只讀需要的參考。"
+
+policy:
+  allow_implicit_invocation: true

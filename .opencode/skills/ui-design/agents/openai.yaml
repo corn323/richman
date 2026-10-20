@@ -1,0 +1,7 @@
+interface:
+  display_name: "UI Design"
+  short_description: "介面視覺設計與修整：新方向、局部修整、渲染後評審或 design system"
+  default_prompt: "請使用 $ui-design 處理這項工作：先判斷是修整、新方向還是評審，只讀與問題相關的 reference。"
+
+policy:
+  allow_implicit_invocation: true
