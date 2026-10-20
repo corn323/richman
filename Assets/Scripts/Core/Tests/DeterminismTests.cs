@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading;
 using NUnit.Framework;
 
 namespace Richman.Core.Tests
@@ -9,15 +8,12 @@ namespace Richman.Core.Tests
     // 涵蓋兩件事：
     //   1. 「正常」路徑：同 seed 經由 PrototypeGameFactory（顯式注入 SeededRandom）
     //      跑兩次完整對局，逐 command 比對完整狀態快照必須完全相同。
-    //   2. 「已知問題」路徑（KnownIssue，B1，docs/AUDIT.md Blocker B1 / ADR-0003 決策 5）：
-    //      GameSession 建構子在未顯式注入 IGameRandom 時 fallback 到
-    //      new SeededRandom(Environment.TickCount)（GameSession.cs:34），
-    //      導致卡牌洗牌／法院判決在「未注入 random」時，每次建局都不同。
-    //      docs/AUDIT.md §8 決策記錄已授權此問題於 Phase 1 修復（移除 TickCount fallback）。
-    //      本測試故意鎖住「現狀」（兩次應該不同），讓這個 fallback 的存在本身被測試覆蓋。
-    //      修復後此測試的前提會反過來：建構子若強制要求 random（不再允許 null），
-    //      這個測試應該被改寫為「不帶 random 呼叫建構子應該丟 ArgumentNullException」，
-    //      而不是繼續比較兩次卡序是否不同——請勿刪除本測試，請依此註解反轉斷言語意。
+    //   2. B1 修復驗證（docs/AUDIT.md Blocker B1 / ADR-0003 決策 5，Phase 1b 已修復）：
+    //      GameSession 建構子過去在未顯式注入 IGameRandom 時會 fallback 到
+    //      new SeededRandom(Environment.TickCount)，導致卡牌洗牌／法院判決在「未注入
+    //      random」時每次建局都不同。Phase 1b 已移除該 fallback，random 改為必填參數，
+    //      不帶 random 呼叫建構子現在必須立即丟出 ArgumentNullException——
+    //      本測試驗證的就是這件事，取代原本「鎖住現狀（兩次應該不同）」的版本。
     public sealed class DeterminismTests
     {
         private const int MaxCommandsPerGame = 20000;
@@ -58,27 +54,18 @@ namespace Richman.Core.Tests
         }
 
         [Test]
-        public void KnownIssueB1_UnseededConstructorFallsBackToTickCountAndProducesDivergentGames()
+        public void FixedB1_ConstructorRequiresRandomAndThrowsArgumentNullExceptionWhenOmitted()
         {
             var mode = GameModeConfig.ClassicBankruptcyFourPlayer();
             var players = BuildPlayers(mode.MaxPlayers);
             const int fixedDiceSeed = 55443322;
 
-            // 兩個 session 使用相同的骰子 seed（隔離移動路徑的變因），
-            // 但都「不」傳入 random，讓兩者各自落入 TickCount fallback。
-            var sessionA = new GameSession(mode, PrototypeBoardFactory.Create(), players, new SeededDiceRoller(fixedDiceSeed));
-            Thread.Sleep(50); // 盡量讓 Environment.TickCount 在兩次建構之間不同。
-            var sessionB = new GameSession(mode, PrototypeBoardFactory.Create(), players, new SeededDiceRoller(fixedDiceSeed));
+            var ex = Assert.Throws<System.ArgumentNullException>(() =>
+                new GameSession(mode, PrototypeBoardFactory.Create(), players, new SeededDiceRoller(fixedDiceSeed), null));
 
-            var hashA = GoldenReplayTests.PlayToFinishAndHash(sessionA, out _);
-            var hashB = GoldenReplayTests.PlayToFinishAndHash(sessionB, out _);
-
-            Assert.That(hashB, Is.Not.EqualTo(hashA),
-                "已知問題 B1（GameSession.cs:34）：未顯式注入 IGameRandom 時 fallback 到 Environment.TickCount，" +
-                "應導致卡牌洗牌／法院判決在兩次建局之間不同，使最終狀態雜湊不同。" +
-                "若此斷言意外失敗（兩次雜湊相同），常見原因是 Environment.TickCount 解析度不足導致巧合碰撞（已知的 flaky 風險，可重跑確認）；" +
-                "但若 Phase 1b 已依 ADR-0003 決策 5 移除 TickCount fallback，則本測試的前提不再成立——" +
-                "請依本檔頂部註解反轉斷言語意，不要直接刪除本測試。");
+            Assert.That(ex.ParamName, Is.EqualTo("random"),
+                "B1 修復（GameSession.cs，ADR-0003 決策5）：random 現在是必填參數，不再 fallback 到 " +
+                "Environment.TickCount。呼叫端必須在 composition root 明確決定並記錄 seed 的來源。");
         }
 
         private static List<PlayerSetup> BuildPlayers(int count)

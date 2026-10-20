@@ -344,7 +344,10 @@ namespace Richman.Simulation
         {
             var players = new[] { new PlayerSetup(1, "Player 1"), new PlayerSetup(2, "Player 2"), new PlayerSetup(3, "Player 3"), new PlayerSetup(4, "Player 4") };
             if (mode.MaxPlayers == 2) players = new[] { players[0], players[1] };
-            return new GameSession(mode, new BoardDefinition(tiles), players, roller, random);
+            // GameSession 的 random 現在是必填（IRng 強制注入，ADR-0003 決策5）。這裡的
+            // `random = null` 只是這個測試 helper 自己的「我不在乎亂數」語意糖，實際上一定會
+            // 給 GameSession 一個固定、非 null 的 seed，不會變成 Core 內部的隱性 fallback。
+            return new GameSession(mode, new BoardDefinition(tiles), players, roller, random ?? new SeededRandom(1));
         }
 
         private static BoardTileDefinition Tile(string id, BoardTileType type, int index)

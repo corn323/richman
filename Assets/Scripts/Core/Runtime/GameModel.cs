@@ -322,5 +322,73 @@ namespace Richman.Core
 
             return null;
         }
+
+        // ADR-0003 決策7：單一合法命令來源。這裡重現 GameSession 各 Execute* 方法在
+        // 送出命令「之前」就能確定答案的驗證（回合歸屬、Phase、PendingAction、資金、
+        // 升級上限），讓呼叫端不用各自重做一次。資金不足/已達上限等「值得送出但會被
+        // 拒絕」的情況，本來就不在這裡回報——那是 Execute 的 CommandErrorCode 職責。
+        public IReadOnlyList<LegalCommandOption> GetLegalCommands(int playerId)
+        {
+            var options = new List<LegalCommandOption>();
+            if (Phase == TurnPhase.Finished) return options.AsReadOnly();
+
+            var player = GetPlayer(playerId);
+            if (player == null || player.Status != PlayerStatus.Active || playerId != CurrentPlayerId)
+                return options.AsReadOnly();
+
+            switch (Phase)
+            {
+                case TurnPhase.AwaitingRoll:
+                    options.Add(new LegalCommandOption(LegalCommandKind.RollDice));
+                    break;
+
+                case TurnPhase.AwaitingAction:
+                    if (PendingAction == PendingAction.ChooseRoute)
+                    {
+                        // Core 在等待岔路選擇時拒絕其他一切命令類型（見 ExecuteChooseRoute 以外
+                        // 各 Execute* 的 Phase/PendingAction 檢查），所以這裡直接回傳、不往下加。
+                        options.Add(new LegalCommandOption(LegalCommandKind.ChooseRoute, RouteChoiceTileIds));
+                        return options.AsReadOnly();
+                    }
+                    if (PendingAction == PendingAction.BuyProperty)
+                    {
+                        var tile = Board.GetTileAt(player.CurrentTileIndex);
+                        if (player.Money >= tile.PurchasePrice)
+                            options.Add(new LegalCommandOption(LegalCommandKind.BuyProperty));
+                    }
+                    if (PendingAction == PendingAction.UpgradeProperty)
+                    {
+                        var tile = Board.GetTileAt(player.CurrentTileIndex);
+                        var property = GetProperty(tile.Id);
+                        if (property != null && property.UpgradeLevel < tile.RentLevels.Count - 1 && player.Money >= tile.UpgradeCost)
+                            options.Add(new LegalCommandOption(LegalCommandKind.UpgradeProperty, new[] { tile.Id }));
+                    }
+                    options.Add(new LegalCommandOption(LegalCommandKind.EndTurn));
+                    options.Add(new LegalCommandOption(LegalCommandKind.Trade));
+                    break;
+
+                case TurnPhase.AwaitingEndTurn:
+                    if (CanUpgradeOwnedProperty)
+                    {
+                        var upgradeableIds = new List<string>();
+                        for (var i = 0; i < _properties.Count; i++)
+                        {
+                            var owned = _properties[i];
+                            if (owned.OwnerId != player.Id) continue;
+                            var ownedTile = Board.GetProperty(owned.PropertyId);
+                            if (ownedTile == null || owned.UpgradeLevel >= ownedTile.RentLevels.Count - 1) continue;
+                            if (player.Money < ownedTile.UpgradeCost) continue;
+                            upgradeableIds.Add(ownedTile.Id);
+                        }
+                        if (upgradeableIds.Count > 0)
+                            options.Add(new LegalCommandOption(LegalCommandKind.UpgradeProperty, upgradeableIds));
+                    }
+                    options.Add(new LegalCommandOption(LegalCommandKind.EndTurn));
+                    options.Add(new LegalCommandOption(LegalCommandKind.Trade));
+                    break;
+            }
+
+            return options.AsReadOnly();
+        }
     }
 }

@@ -6,6 +6,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\Assets\Scripts\Core\Runtime\**\*.cs" />
+    <!-- ADR-0003 決策6 / docs/AUDIT.md Blocker B2：Core 是獨立組件，一律透過 ProjectReference
+         取得，禁止用 <Compile Include> 把原始碼直接吸收進來。 -->
+    <ProjectReference Include="..\..\Richman.Core.Standalone.csproj" />
   </ItemGroup>
 </Project>

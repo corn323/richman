@@ -7,6 +7,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Scripts\**\*.cs" />
-    <Compile Include="..\Assets\Scripts\Core\Runtime\**\*.cs" LinkBase="Richman.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ADR-0003 決策6 / docs/AUDIT.md Blocker B2：Core 是獨立組件，一律透過 ProjectReference
+         取得，禁止用 <Compile Include> 把原始碼直接吸收進來（那樣 internal 邊界對展示層全開）。 -->
+    <ProjectReference Include="..\Richman.Core.Standalone.csproj" />
   </ItemGroup>
 </Project>

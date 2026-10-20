@@ -26,12 +26,15 @@ namespace Richman.Core
         private readonly CardDeck _chanceDeck;
         private readonly CardDeck _destinyDeck;
 
-        public GameSession(GameModeConfig mode, BoardDefinition board, IReadOnlyList<PlayerSetup> playerSetups, IDiceRoller diceRoller, IGameRandom random = null)
+        // IRng 強制注入（ADR-0003 決策5 / docs/AUDIT.md Blocker B1）：random 不再有預設值、
+        // 不再 fallback 到 Environment.TickCount。呼叫端必須明確決定並記錄 seed 的來源，
+        // 否則同一份卡牌/法院亂數序列在每次啟動時都會不同，破壞可重播性。
+        public GameSession(GameModeConfig mode, BoardDefinition board, IReadOnlyList<PlayerSetup> playerSetups, IDiceRoller diceRoller, IGameRandom random)
         {
             Mode = mode ?? throw new ArgumentNullException(nameof(mode));
             Board = board ?? throw new ArgumentNullException(nameof(board));
             _diceRoller = diceRoller ?? throw new ArgumentNullException(nameof(diceRoller));
-            _random = random ?? new SeededRandom(Environment.TickCount);
+            _random = random ?? throw new ArgumentNullException(nameof(random));
             _chanceDeck = new CardDeck(ChanceCards, _random);
             _destinyDeck = new CardDeck(DestinyCards, _random);
             if (playerSetups == null) throw new ArgumentNullException(nameof(playerSetups));
@@ -61,6 +64,12 @@ namespace Richman.Core
         public GameModeConfig Mode { get; }
         public BoardDefinition Board { get; }
         public GameState State { get; }
+
+        // ADR-0003 決策7：單一合法命令來源，供 HUD／Bot 共用，取代各自重複的
+        // 「現在能做什麼」判斷（docs/AUDIT.md Major：GodotGameplayHud.cs:155-181、
+        // GameplayHUD.cs:153-165、Bots.cs:19-38）。實際邏輯在 GameState.GetLegalCommands，
+        // 這裡只是 GameSession 對外的便利入口。
+        public IReadOnlyList<LegalCommandOption> GetLegalCommands(int playerId) => State.GetLegalCommands(playerId);
 
         private sealed class CardDeck
         {

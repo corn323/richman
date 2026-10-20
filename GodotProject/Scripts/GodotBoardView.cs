@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Godot;
@@ -156,9 +157,19 @@ namespace Richman.GodotPresentation
             for (var i = 0; i < _board.MainRouteTileCount; i++)
             {
                 var expected = _board.GetTileAt((i + 1) % _board.MainRouteTileCount).Id;
-                if (!_board.GetTileAt(i).NextTileIds.ContainsOrdinal(expected)) throw new InvalidDataException("Main route is not closed at " + _board.GetTileAt(i).Id);
+                if (!ContainsOrdinal(_board.GetTileAt(i).NextTileIds, expected)) throw new InvalidDataException("Main route is not closed at " + _board.GetTileAt(i).Id);
             }
             GD.Print("WORLD_TOUR_ROUTE_OK main=", _board.MainRouteTileCount, " all=", _board.TileCount, " graph=Core-authoritative");
+        }
+
+        // Richman.Core 現在是獨立組件（ADR-0003 決策6），Core 內部同等用途的
+        // BoardStringExtensions.ContainsOrdinal 是 internal，展示層本就不該存取——
+        // 這裡維護一份僅供本檔使用的等效 helper，而不是把 Core 的 internal 改成 public。
+        private static bool ContainsOrdinal(IReadOnlyList<string> values, string value)
+        {
+            for (var i = 0; i < values.Count; i++)
+                if (string.Equals(values[i], value, StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private void BuildPawn(PlayerState player) => BuildPawn(player, _playerCharacters.TryGetValue(player.Id, out var character) ? character : 0, _playerColors.TryGetValue(player.Id, out var color) ? color : PlayerColor(player.Id));

@@ -699,7 +699,10 @@ namespace Richman.Core.Tests
         {
             var players = new List<PlayerSetup>();
             for (var i = 1; i <= mode.MaxPlayers; i++) players.Add(new PlayerSetup(i, "Player " + i));
-            return new GameSession(mode, new BoardDefinition(tiles), players, diceRoller, random);
+            // GameSession 的 random 現在是必填（IRng 強制注入，ADR-0003 決策5）。這裡的
+            // `random = null` 只是這個測試 helper 自己的「我不在乎亂數」語意糖，實際上一定會
+            // 給 GameSession 一個固定、非 null 的 seed，不會變成 Core 內部的隱性 fallback。
+            return new GameSession(mode, new BoardDefinition(tiles), players, diceRoller, random ?? new SeededRandom(1));
         }
 
         private static BoardTileDefinition Tile(string id, BoardTileType type, int positionIndex)

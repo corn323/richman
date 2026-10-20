@@ -7,6 +7,14 @@ namespace Richman.Core
         GameCommand ChooseCommand(GameState state, int playerId);
     }
 
+    // ADR-0003 決策7：改用 GameState.GetLegalCommands 取得「現在能做什麼」，取代原本
+    // 自行重算 Phase/PendingAction/money/UpgradeLevel 的判斷（docs/AUDIT.md Major：
+    // 三處重複之一，另兩處為 GodotGameplayHud.cs/GameplayHUD.cs，留待 Phase 4 處理）。
+    //
+    // 刻意保留依 Phase 分支的外層結構，且 AwaitingEndTurn 分支刻意不理會
+    // GetLegalCommands 可能回報的「起點格任意自有地產」升級選項（CanUpgradeOwnedProperty），
+    // 永遠直接結束回合——這是為了讓這個最簡單 Bot 的行為與 Phase 1a 黃金重播雜湊
+    // （GoldenReplayTests.cs）完全一致，不產生額外命令、不消耗額外亂數。
     public sealed class SimpleBotStrategy : IBotStrategy
     {
         public GameCommand ChooseCommand(GameState state, int playerId)
@@ -18,24 +26,35 @@ namespace Richman.Core
 
             switch (state.Phase)
             {
-                case TurnPhase.AwaitingRoll: return new RollDiceCommand(playerId);
+                case TurnPhase.AwaitingRoll:
+                    return new RollDiceCommand(playerId);
+
                 case TurnPhase.AwaitingAction:
-                    if (state.PendingAction == PendingAction.ChooseRoute && state.RouteChoiceTileIds.Count > 0)
-                        return new ChooseRouteCommand(playerId, state.RouteChoiceTileIds[0]);
-                    var tile = state.Board.GetTileAt(player.CurrentTileIndex);
-                    if (state.PendingAction == PendingAction.BuyProperty && player.Money >= tile.PurchasePrice)
+                {
+                    var legalCommands = state.GetLegalCommands(playerId);
+                    for (var i = 0; i < legalCommands.Count; i++)
                     {
-                        return new BuyPropertyCommand(playerId);
+                        if (legalCommands[i].Kind == LegalCommandKind.ChooseRoute && legalCommands[i].ParameterIds.Count > 0)
+                            return new ChooseRouteCommand(playerId, legalCommands[i].ParameterIds[0]);
                     }
-                    var property = state.GetProperty(tile.Id);
-                    if (state.PendingAction == PendingAction.UpgradeProperty && property != null &&
-                        property.UpgradeLevel < tile.RentLevels.Count - 1 && player.Money >= tile.UpgradeCost)
+                    for (var i = 0; i < legalCommands.Count; i++)
                     {
-                        return new UpgradePropertyCommand(playerId);
+                        if (legalCommands[i].Kind == LegalCommandKind.BuyProperty)
+                            return new BuyPropertyCommand(playerId);
+                    }
+                    for (var i = 0; i < legalCommands.Count; i++)
+                    {
+                        if (legalCommands[i].Kind == LegalCommandKind.UpgradeProperty)
+                            return new UpgradePropertyCommand(playerId);
                     }
                     return new EndTurnCommand(playerId);
-                case TurnPhase.AwaitingEndTurn: return new EndTurnCommand(playerId);
-                default: throw new InvalidOperationException("The game no longer accepts bot commands.");
+                }
+
+                case TurnPhase.AwaitingEndTurn:
+                    return new EndTurnCommand(playerId);
+
+                default:
+                    throw new InvalidOperationException("The game no longer accepts bot commands.");
             }
         }
     }

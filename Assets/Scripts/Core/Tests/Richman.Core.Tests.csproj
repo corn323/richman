@@ -18,5 +18,6 @@
     <Compile Include="DeterminismTests.cs" />
     <Compile Include="CharacterizationTests.cs" />
     <Compile Include="BoardConstraintTests.cs" />
+    <Compile Include="ArchitectureTests.cs" />
   </ItemGroup>
 </Project>

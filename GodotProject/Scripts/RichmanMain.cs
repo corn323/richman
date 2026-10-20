@@ -13,17 +13,31 @@ namespace Richman.GodotPresentation
         private GameSession _session;
         private bool _busy;
         private int _lastLandingPlayerId;
+        private int _sessionSeed;
         private readonly int[] _characters = { 0, 1, 2, 3 };
         private readonly Color[] _colors = { new Color("#bf705f"), new Color("#6387a5"), new Color("#82956f"), new Color("#a080a0") };
+
+        // 純顯示用的固定 seed：開局前的角色預覽棋盤不是真正的對局，不需要、也不應該
+        // 消耗/影響正式對局的亂數序列（IRng 強制注入後，建構 GameSession 一定要給一個
+        // seed，這裡刻意寫死，和下方 StartGame() 的真實對局 seed 無關）。
+        private const int PreviewOnlySeed = 928371;
 
         public override void _Ready()
         {
             BuildPresentationBootstrap();
+
+            // ADR-0003 決策5 / docs/AUDIT.md Blocker B1：composition root 在這裡「產生一次」
+            // 本次執行的對局 seed（而不是寫死常數），並印出來以便回報問題時可重播。
+            // 骰子與卡牌/法院亂數刻意使用彼此不同、但都從同一個 seed 固定衍生出來的值，
+            // 讓兩個亂數流互相獨立，不會因為共用同一組狀態而產生意外相關性。
+            _sessionSeed = (int)GD.Randi();
+            GD.Print("SESSION_SEED=" + _sessionSeed);
+
             _board = new GodotBoardView { Name = "Board" };
             AddChild(_board);
             var board = PrototypeBoardFactory.Create();
             var setup = new List<PlayerSetup> { new PlayerSetup(1, "旅人・小徑"), new PlayerSetup(2, "建築師・石榴"), new PlayerSetup(3, "園藝師・苔苔"), new PlayerSetup(4, "觀星者・弦月") };
-            var previewSession = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board, setup, new SeededDiceRoller(928371));
+            var previewSession = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), board, setup, new SeededDiceRoller(PreviewOnlySeed), new SeededRandom(PreviewOnlySeed));
             _board.Build(board, previewSession.State.Players, _characters, _colors);
             _dice = new GodotDiceView { Name = "Dice" };
             AddChild(_dice);
@@ -53,7 +67,11 @@ namespace Richman.GodotPresentation
             var names = new[] { "旅人・小徑", "建築師・石榴", "園藝師・苔苔", "觀星者・弦月" };
             var players = new List<PlayerSetup>();
             for (var i = 0; i < 4; i++) players.Add(new PlayerSetup(i + 1, names[_characters[i]]));
-            _session = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create(), players, new SeededDiceRoller(928371));
+            // 骰子與卡牌/法院亂數從同一個 composition-root seed（_sessionSeed，已於 _Ready 印出）
+            // 固定衍生出兩個不同的子 seed，避免兩個亂數流共用同一個生成器狀態。
+            var diceSeed = unchecked(_sessionSeed ^ 0x5DEECE);
+            _session = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create(), players,
+                new SeededDiceRoller(diceSeed), new SeededRandom(_sessionSeed));
             _board.SetPreview(1, _characters[0], _colors[0]); _board.SetPreview(2, _characters[1], _colors[1]);
             _board.SetPreview(3, _characters[2], _colors[2]); _board.SetPreview(4, _characters[3], _colors[3]);
             _board.SyncPawns(_session.State); _board.ApplyState(_session.State);
