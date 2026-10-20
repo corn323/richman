@@ -19,5 +19,7 @@
     <Compile Include="CharacterizationTests.cs" />
     <Compile Include="BoardConstraintTests.cs" />
     <Compile Include="ArchitectureTests.cs" />
+    <Compile Include="EventSequenceTests.cs" />
+    <Compile Include="ResolveDecisionTests.cs" />
   </ItemGroup>
 </Project>

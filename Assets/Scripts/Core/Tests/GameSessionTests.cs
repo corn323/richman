@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using Richman.Core;
+using Richman.Core.Events;
 
 namespace Richman.Core.Tests
 {
@@ -456,15 +458,19 @@ namespace Richman.Core.Tests
                 new[] { Tile("start", BoardTileType.Start, 0), Tile("rest", BoardTileType.Rest, 1), Tile("chance-2", BoardTileType.Chance, 2), Tile("rest-2", BoardTileType.Rest, 3) },
                 new ScriptedDiceRoller(new DiceResult(1, 1)));
 
-            session.Execute(new RollDiceCommand(1));
+            var roll = session.Execute(new RollDiceCommand(1));
 
             Assert.That(session.State.LastDrawnCard, Is.Not.Null);
-            // TODO(Phase1c): 待 GameEvent 後改為事件斷言。目前沒有結構化欄位可以驗證
-            // 「LastEventMessage 是否正確組合了卡牌標題/描述/結果」這件事本身——這正是
-            // LastEventMessage 要被 ADR-0003 的結構化事件取代的原因，Phase 1c 前暫時保留。
-            Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Title));
-            Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Description));
-            Assert.That(session.State.LastEventMessage, Does.Contain("Result:"));
+            var drawnCard = session.State.LastDrawnCard;
+            // Phase 1c：改以結構化事件斷言取代 LastEventMessage 字串斷言（ADR-0003 決策2），
+            // 驗證「抽到哪張牌」與「效果確實被套用」各自獨立可驗證，不再依賴拼出來的顯示字串。
+            var cardDrawn = roll.Events.OfType<CardDrawn>().Single();
+            Assert.That(cardDrawn.CardId, Is.EqualTo(drawnCard.Id));
+            Assert.That(cardDrawn.DeckId, Is.EqualTo(drawnCard.DeckId));
+            var cardEffectApplied = roll.Events.OfType<CardEffectApplied>().Single();
+            Assert.That(cardEffectApplied.CardId, Is.EqualTo(drawnCard.Id));
+            Assert.That(cardEffectApplied.Effect, Is.EqualTo(drawnCard.Effect));
+            Assert.That(cardEffectApplied.Amount, Is.EqualTo(drawnCard.Amount));
             if (session.State.LastDrawnCard.Effect == MapCardEffect.ReceiveMoney)
                 Assert.That(session.State.GetPlayer(1).Money, Is.EqualTo(500 + session.State.LastDrawnCard.Amount));
             else if (session.State.LastDrawnCard.Effect == MapCardEffect.PayBank)

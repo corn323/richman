@@ -53,6 +53,41 @@ namespace Richman.Core.Tests
             Assert.That(sessionB.State.Phase, Is.EqualTo(TurnPhase.Finished), "Session B did not finish within " + MaxCommandsPerGame + " commands.");
         }
 
+        // Phase 1c：事件層的確定性驗證。ADR-0003 決策1 之後，Execute() 回傳的
+        // CommandResult.Events 跟 GameState 本身一樣是「輸出」的一部分，同 seed 重播不只
+        // 狀態快照要逐 command 相同，事件型別、順序與關鍵欄位（含全域 Sequence/TurnNumber）
+        // 也必須逐 command 完全相同，否則任何依賴事件重播/廣播的消費端（展示層、未來的連線
+        // 同步）都會對不上。
+        [TestCase(928371)]
+        [TestCase(7)]
+        [TestCase(42)]
+        public void SameSeedProducesIdenticalEventSequenceCommandByCommand(int seed)
+        {
+            var sessionA = PrototypeGameFactory.CreateFourPlayerSession(seed);
+            var sessionB = PrototypeGameFactory.CreateFourPlayerSession(seed);
+            var strategy = new SimpleBotStrategy();
+            var commandIndex = 0;
+
+            while (sessionA.State.Phase != TurnPhase.Finished && commandIndex < MaxCommandsPerGame)
+            {
+                var playerId = sessionA.State.CurrentPlayerId;
+                var commandA = strategy.ChooseCommand(sessionA.State, playerId);
+                var commandB = strategy.ChooseCommand(sessionB.State, playerId);
+                var resultA = sessionA.Execute(commandA);
+                var resultB = sessionB.Execute(commandB);
+
+                Assert.That(resultB.Succeeded, Is.EqualTo(resultA.Succeeded),
+                    "Command #" + commandIndex + ": command success diverged (A=" + resultA.ErrorCode + ", B=" + resultB.ErrorCode + ").");
+                Assert.That(GoldenReplayTests.SerializeEvents(resultB.Events), Is.EqualTo(GoldenReplayTests.SerializeEvents(resultA.Events)),
+                    "Command #" + commandIndex + ": event sequence diverged between two sessions built from the same seed.");
+
+                commandIndex++;
+            }
+
+            Assert.That(sessionA.State.Phase, Is.EqualTo(TurnPhase.Finished), "Session A did not finish within " + MaxCommandsPerGame + " commands.");
+            Assert.That(sessionB.State.Phase, Is.EqualTo(TurnPhase.Finished), "Session B did not finish within " + MaxCommandsPerGame + " commands.");
+        }
+
         [Test]
         public void FixedB1_ConstructorRequiresRandomAndThrowsArgumentNullExceptionWhenOmitted()
         {

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using NUnit.Framework;
+using Richman.Core.Events;
 
 namespace Richman.Core.Tests
 {
@@ -107,6 +109,55 @@ namespace Richman.Core.Tests
             using var sha = SHA256.Create();
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(text));
             return Convert.ToHexString(bytes);
+        }
+
+        /// <summary>
+        /// Phase 1c：把一組 <see cref="GameEvent"/> 序列化成一個穩定、人類可讀的文字表示，
+        /// 包含每個事件的型別與關鍵欄位（含 Sequence/TurnNumber）。供
+        /// <see cref="DeterminismTests"/>（同 seed 逐事件比對）與
+        /// ResolveDecisionTests（語法糖命令與 ResolveDecisionCommand 等價比對）共用，
+        /// 避免兩邊各自手刻一份容易漏欄位、容易跑掉的序列化邏輯。
+        /// </summary>
+        internal static string SerializeEvents(IReadOnlyList<GameEvent> events)
+        {
+            var sb = new StringBuilder();
+            for (var i = 0; i < events.Count; i++)
+            {
+                sb.Append(events[i].GetType().Name).Append('#').Append(events[i].Sequence)
+                  .Append('@').Append(events[i].TurnNumber).Append(':').Append(SerializePayload(events[i])).Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        private static string SerializePayload(GameEvent gameEvent)
+        {
+            switch (gameEvent)
+            {
+                case TurnStarted ev: return ev.StartedTurnNumber + "|" + ev.PlayerId;
+                case PhaseChanged ev: return ev.Stage.ToString();
+                case DiceRolled ev: return ev.PlayerId + "|" + ev.First + "|" + ev.Second + "|" + ev.Purpose;
+                case PawnStepped ev: return ev.PlayerId + "|" + ev.FromTileIndex + "|" + ev.ToTileIndex + "|" + ev.PassedStart;
+                case PawnLanded ev: return ev.PlayerId + "|" + ev.TileIndex + "|" + ev.TileId + "|" + ev.TileType;
+                case SalaryCollected ev: return ev.PlayerId + "|" + ev.Amount;
+                case PropertyPurchased ev: return ev.PlayerId + "|" + ev.PropertyId + "|" + ev.Amount;
+                case RentPaid ev: return ev.PayerId + "|" + ev.ReceiverId + "|" + ev.PropertyId + "|" + ev.Amount + "|" + ev.BaseRent + "|" + ev.DistrictBonusAmount;
+                case PropertyUpgraded ev: return ev.PlayerId + "|" + ev.PropertyId + "|" + ev.NewLevel;
+                case MoneyChanged ev: return ev.PlayerId + "|" + ev.Delta + "|" + ev.NewBalance + "|" + ev.Reason;
+                case CardDrawn ev: return ev.PlayerId + "|" + ev.CardId + "|" + ev.DeckId;
+                case CardEffectApplied ev: return ev.PlayerId + "|" + ev.CardId + "|" + ev.Effect + "|" + ev.Amount;
+                case PlayerTeleported ev: return ev.PlayerId + "|" + ev.FromTileIndex + "|" + ev.ToTileIndex + "|" + ev.Reason;
+                case PlayerDetained ev: return ev.PlayerId + "|" + ev.Kind + "|" + ev.Turns;
+                case TurnSkipped ev: return ev.PlayerId + "|" + ev.Reason + "|" + ev.TurnsRemaining;
+                case PrisonEscapeAttempted ev: return ev.PlayerId + "|" + ev.Success + "|" + ev.AttemptsRemaining;
+                case CourtRuled ev: return ev.PlayerId + "|" + ev.DiceTotal + "|" + ev.Ruling + "|" + ev.Amount;
+                case TradeExecuted ev: return ev.InitiatorId + "|" + ev.TargetId + "|" + ev.OfferedMoney + "|" + ev.RequestedMoney + "|" + ev.OfferedPropertyId + "|" + ev.RequestedPropertyId;
+                case DecisionRequested ev: return ev.Kind + "|" + ev.PlayerId + "|" + string.Join(",", ev.OptionIds) + "|" + ev.ContextTileId;
+                case DecisionResolved ev: return ev.Kind + "|" + ev.PlayerId + "|" + ev.OptionId;
+                case PlayerBankrupt ev: return ev.PlayerId + "|" + ev.CreditorId + "|" + ev.TransferredMoney + "|" + string.Join(",", ev.TransferredPropertyIds);
+                case GameFinished ev: return ev.WinnerId + "|" + ev.FinishedTurnNumber + "|" + ev.Reason;
+                case TurnEnded ev: return ev.PlayerId + "|" + ev.EndedTurnNumber;
+                default: throw new InvalidOperationException("Unhandled event type in test serializer: " + gameEvent.GetType().Name);
+            }
         }
     }
 }
