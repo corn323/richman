@@ -18,6 +18,10 @@ namespace Richman.GodotPresentation
         public void Build(BoardDefinition board, IReadOnlyList<PlayerState> players, int[] characters, Color[] colors)
         {
             _board = board;
+            // Phase 1d-3（ADR-0002 §3）：BoardLayoutPlanner.AssignMapPositions 不再是
+            // BoardDefinition 建構流程的一部分（規則路徑不讀座標）——展示層是座標的唯一
+            // 消費端之一，必須在讀任何 tile.MapPosition（BuildTile 以下）之前自己顯式呼叫。
+            BoardLayoutPlanner.AssignMapPositions(board);
             var root = new Node3D { Name = "ImportedWorldTour" };
             AddChild(root);
             var importedMap = GD.Load<PackedScene>("res://Assets/archipelago_map.glb");

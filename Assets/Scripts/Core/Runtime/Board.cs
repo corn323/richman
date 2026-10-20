@@ -246,7 +246,7 @@ namespace Richman.Core
             if (startCount != 1) throw new ArgumentException("A board must have exactly one Start tile.", nameof(tiles));
 
             // ADR-0002：移除「主環必佔前 N 個連續 index」約束。節點的身分只靠 id；
-            // IsMainRoute 降級為佈局/標注提示（見 AssignMapPositions 與 MainRouteTileCount），
+            // IsMainRoute 降級為佈局/標注提示（見 BoardLayoutPlanner.cs 與 MainRouteTileCount），
             // 不再是規則驗證的一部分。
             //
             // 省略 NextTileIds 的「主環」格（IsMainRoute=true）預設接到陣列順序的下一格
@@ -280,18 +280,11 @@ namespace Richman.Core
             // 與合流（多節點指向同一節點）都是合法拓撲，不要求迴圈本身是單一封閉環。
             ValidateReachableFromStart(startTileId);
 
-            try
-            {
-                AssignMapPositions();
-            }
-            catch (ArgumentException)
-            {
-                // ADR-0002：pos/rot 只是佈局提示，不影響規則（§3）。現有的橢圓＋Bezier 佈局
-                // 演算法仍假設「前 MainRouteTileCount 格是主環」且「支線每格只有一個出口」；
-                // 一般圖結構不保證滿足這些假設時，佈局計算在這裡放棄即可（未算到的格子維持
-                // 預設座標），不應該因為算不出佈局就擋下原本合法的圖結構建構。這個暫時的
-                // try/catch 會隨 AssignMapPositions 移出 Core（ADR-0002 後續步驟）一併清理。
-            }
+            // Phase 1d-3（ADR-0002 §3）：視覺佈局計算（橢圓＋Bezier）不再是建構流程的一部分，
+            // 搬到獨立的 BoardLayoutPlanner.AssignMapPositions(board)，由需要座標的呼叫端
+            // （GodotBoardView.Build、Tools/Simulation --export-map）自己顯式呼叫。建構完
+            // 成後，所有 tile 的 MapPosition 維持預設值（全 0）直到有人呼叫它——這是刻意的：
+            // 證明規則路徑完全不依賴座標（見 BoardLayoutPlanner.cs 開頭的說明）。
 
             StartPositionIndex = startPositionIndex;
             _tilesView = _tiles.AsReadOnly();
@@ -365,63 +358,6 @@ namespace Richman.Core
             {
                 if (!visited.Contains(_tiles[i].Id))
                     throw new ArgumentException("Tile is not reachable from the Start tile: " + _tiles[i].Id, nameof(_tiles));
-            }
-        }
-
-        private void AssignMapPositions()
-        {
-            for (var i = 0; i < _mainRouteTileCount; i++)
-            {
-                var angle = (Math.PI * 2.0 * i / _mainRouteTileCount) - (Math.PI / 2.0);
-                var x = (float)(11.7 * Math.Cos(angle) + 0.42 * Math.Sin(3.0 * angle));
-                var z = (float)(8.3 * Math.Sin(angle) + 0.30 * Math.Sin(2.0 * angle));
-                var y = (float)(0.62 + 0.16 * Math.Sin(i * 0.71) + 0.07 * Math.Sin(i * 1.89));
-                _tiles[i].SetMapPosition(new BoardMapPosition(x, y, z, 0f));
-            }
-
-            for (var sourceIndex = 0; sourceIndex < _mainRouteTileCount; sourceIndex++)
-            {
-                var source = _tiles[sourceIndex];
-                for (var edge = 0; edge < source.NextTileIds.Count; edge++)
-                {
-                    var branchId = source.NextTileIds[edge];
-                    var branch = _tilesById[branchId];
-                    if (branch.IsMainRoute) continue;
-                    var branchNodes = new List<BoardTileDefinition>();
-                    var visited = new HashSet<string>(StringComparer.Ordinal);
-                    var current = branch;
-                    while (!current.IsMainRoute)
-                    {
-                        if (!visited.Add(current.Id)) throw new ArgumentException("Branch contains a cycle before merging: " + current.Id);
-                        branchNodes.Add(current);
-                        if (current.NextTileIds.Count != 1) throw new ArgumentException("Each branch waypoint must have one onward route: " + current.Id);
-                        current = _tilesById[current.NextTileIds[0]];
-                    }
-                    var end = current.MapPosition;
-                    var start = source.MapPosition;
-                    var midX = (start.X + end.X) * 0.5f;
-                    var midZ = (start.Z + end.Z) * 0.5f;
-                    var length = MathF.Sqrt(midX * midX + midZ * midZ);
-                    var controlX = midX - (length > 0.001f ? midX / length * 2.5f : 0f);
-                    var controlZ = midZ - (length > 0.001f ? midZ / length * 2.5f : 0f);
-                    for (var waypoint = 0; waypoint < branchNodes.Count; waypoint++)
-                    {
-                        var t = (waypoint + 1f) / (branchNodes.Count + 1f);
-                        var inverse = 1f - t;
-                        var x = inverse * inverse * start.X + 2f * inverse * t * controlX + t * t * end.X;
-                        var z = inverse * inverse * start.Z + 2f * inverse * t * controlZ + t * t * end.Z;
-                        branchNodes[waypoint].SetMapPosition(new BoardMapPosition(x, 0.85f, z, 0f));
-                    }
-                }
-            }
-
-            for (var i = 0; i < _tiles.Count; i++)
-            {
-                var tile = _tiles[i];
-                var next = _tilesById[tile.NextTileIds[0]].MapPosition;
-                var position = tile.MapPosition;
-                var rotation = (float)(-Math.Atan2(next.Z - position.Z, next.X - position.X) * 180.0 / Math.PI);
-                tile.SetMapPosition(new BoardMapPosition(position.X, position.Y, position.Z, rotation));
             }
         }
 

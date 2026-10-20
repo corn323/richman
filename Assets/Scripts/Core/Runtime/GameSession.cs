@@ -27,6 +27,12 @@ namespace Richman.Core
         private readonly IGameRandom _random;
         private readonly CardDeck _chanceDeck;
         private readonly CardDeck _destinyDeck;
+        // Phase 1d-3（ADR-0002）：逐格走圖的移動解析抽到獨立類別（MovementResolver.cs）。
+        // 建構一次即可——Board/State 在整個 Session 生命週期內是同一個參照，Mode.StartBonus
+        // 不會變。Emit 是 GameSession 自己的私有方法（蓋 Sequence/TurnNumber、登錄
+        // _eventLog/_callEvents），用 lambda 包成 Action<GameEvent> 傳進去，讓事件管道仍然
+        // 只有這一份實作。
+        private readonly MovementResolver _movementResolver;
 
         // ADR-0003 決策1：事件骨架。_eventLog 是整個 GameSession 生命週期內的唯讀累積序列
         // （GameSession.EventLog 對外曝光），_callEvents 是「本次 Execute() 呼叫期間新增了哪些
@@ -71,6 +77,7 @@ namespace Richman.Core
 
             State = new GameState(mode, board, players, properties);
             _eventLogView = _eventLog.AsReadOnly();
+            _movementResolver = new MovementResolver(Board, State, Mode.StartBonus, e => Emit(e));
         }
 
         public GameModeConfig Mode { get; }
@@ -222,7 +229,7 @@ namespace Richman.Core
                     State.LastEventMessage = "Doubles released you from prison; move this turn.";
                     State.MovementStepsRemaining = prisonDice.Total;
                     var prisonPath = new List<int>(prisonDice.Total);
-                    ContinueMovement(player, prisonPath);
+                    _movementResolver.ContinueMovement(player, prisonPath);
                     if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
                     return CommandResult.Success(prisonDice, prisonFrom, player.CurrentTileIndex, prisonPath.AsReadOnly());
                 }
@@ -261,7 +268,7 @@ namespace Richman.Core
             State.LastDiceResult = dice;
             State.MovementStepsRemaining = dice.Total;
             var path = new List<int>(dice.Total);
-            ContinueMovement(player, path);
+            _movementResolver.ContinueMovement(player, path);
             if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
             return CommandResult.Success(dice, from, player.CurrentTileIndex, path.AsReadOnly());
         }
@@ -283,8 +290,8 @@ namespace Richman.Core
             State.PendingAction = PendingAction.None;
             State.LastEventMessage = string.Empty;
             var path = new List<int>(State.MovementStepsRemaining);
-            MoveOneStep(player, Board.GetTile(command.NextTileId), path);
-            ContinueMovement(player, path);
+            _movementResolver.MoveOneStep(player, Board.GetTile(command.NextTileId), path);
+            _movementResolver.ContinueMovement(player, path);
             if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
             return CommandResult.Success(null, from, player.CurrentTileIndex, path.AsReadOnly());
         }
@@ -317,67 +324,6 @@ namespace Richman.Core
                     return ExecuteUpgrade(player, new UpgradePropertyCommand(player.Id, command.OptionId));
                 default:
                     return CommandResult.Failure(CommandErrorCode.InvalidCommand, "Unsupported decision kind.");
-            }
-        }
-
-        private void ContinueMovement(PlayerState player, List<int> path)
-        {
-            EmitPhase(TurnStage.Move);
-            while (State.MovementStepsRemaining > 0)
-            {
-                // Phase 1d-2（條件邊）：只考慮「現在開著」的邊——RequiredFlag 未滿足的邊
-                // 視為不存在。分岔判斷（是否要停下來等 ChooseRoute）看的是開啟邊數，不是
-                // 宣告邊數：同一格在 flag 開/關時，可能一次只有一條路可走、一次有兩條以上。
-                var options = Board.GetOpenNextTiles(player.CurrentTileIndex, State.HasBoardFlag);
-                if (options.Count == 0)
-                {
-                    // 這一格現在一條開著的出邊都沒有：玩家停在原地，本次移動剩餘步數作廢，
-                    // 讓呼叫端（ExecuteRoll/ExecuteChooseRoute 的「remaining==0 就 ResolveLanding」
-                    // 分支）照常對這一格跑落地解析——跟步數正常走完時走同一條路徑。
-                    var stuck = Board.GetTileAt(player.CurrentTileIndex);
-                    Emit(new MovementBlocked(player.Id, stuck.PositionIndex, stuck.Id));
-                    State.MovementStepsRemaining = 0;
-                    State.SetRouteChoices(null);
-                    return;
-                }
-                if (options.Count > 1)
-                {
-                    State.SetRouteChoices(options);
-                    State.PendingAction = PendingAction.ChooseRoute;
-                    State.Phase = TurnPhase.AwaitingAction;
-                    State.LastEventMessage = "請選擇接下來的旅遊路線。";
-                    var optionIds = new string[options.Count];
-                    for (var i = 0; i < options.Count; i++) optionIds[i] = options[i].Id;
-                    Emit(new DecisionRequested(DecisionKind.ChooseRoute, player.Id, optionIds, null));
-                    return;
-                }
-                MoveOneStep(player, options[0], path);
-            }
-            State.SetRouteChoices(null);
-        }
-
-        private void MoveOneStep(PlayerState player, BoardTileDefinition destination, List<int> path)
-        {
-            var from = player.CurrentTileIndex;
-            player.MoveTo(destination.PositionIndex);
-            State.MovementStepsRemaining--;
-            path.Add(destination.PositionIndex);
-            // Phase 1d-2（通用 pass-through 觸發）：取代舊的
-            // `destination.PositionIndex == Board.StartPositionIndex`。對現有地圖（唯一的
-            // Start 格預設 PassThroughTrigger=GrantStartSalary）這個條件在數學上完全等價，
-            // 只是換了一個不綁死 PositionIndex 的通用判斷方式。
-            var passedStart = destination.PassThroughTrigger == PassThroughTriggerKind.GrantStartSalary;
-            Emit(new PawnStepped(player.Id, from, destination.PositionIndex, passedStart));
-            if (passedStart)
-            {
-                player.AddMoney(Mode.StartBonus);
-                // 原規則本來就對 StartBonus==0 的棋盤設定無條件呼叫 AddMoney(0)（行為不變）；
-                // 只有金額 > 0 時才發出「領到薪水」事件，避免每次經過起點都產生一筆 0 元雜訊事件。
-                if (Mode.StartBonus > 0)
-                {
-                    Emit(new SalaryCollected(player.Id, Mode.StartBonus));
-                    Emit(new MoneyChanged(player.Id, Mode.StartBonus, player.Money, MoneyChangeReason.Salary));
-                }
             }
         }
 

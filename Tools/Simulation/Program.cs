@@ -35,6 +35,9 @@ namespace Richman.Simulation
         private static void ExportMap(string outputPath)
         {
             var board = PrototypeBoardFactory.Create();
+            // Phase 1d-3（ADR-0002 §3）：座標不再隨 BoardDefinition 建構自動算好，匯出工具
+            // 是座標的消費端之一，讀 tile.MapPosition 之前要自己顯式呼叫一次。
+            BoardLayoutPlanner.AssignMapPositions(board);
             var tiles = new List<object>();
             for (var i = 0; i < board.TileCount; i++)
             {
