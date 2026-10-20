@@ -26,13 +26,6 @@ namespace Richman.GodotPresentation
         {
             BuildPresentationBootstrap();
 
-            // ADR-0003 決策5 / docs/AUDIT.md Blocker B1：composition root 在這裡「產生一次」
-            // 本次執行的對局 seed（而不是寫死常數），並印出來以便回報問題時可重播。
-            // 骰子與卡牌/法院亂數刻意使用彼此不同、但都從同一個 seed 固定衍生出來的值，
-            // 讓兩個亂數流互相獨立，不會因為共用同一組狀態而產生意外相關性。
-            _sessionSeed = (int)GD.Randi();
-            GD.Print("SESSION_SEED=" + _sessionSeed);
-
             _board = new GodotBoardView { Name = "Board" };
             AddChild(_board);
             var board = PrototypeBoardFactory.Create();
@@ -67,8 +60,12 @@ namespace Richman.GodotPresentation
             var names = new[] { "旅人・小徑", "建築師・石榴", "園藝師・苔苔", "觀星者・弦月" };
             var players = new List<PlayerSetup>();
             for (var i = 0; i < 4; i++) players.Add(new PlayerSetup(i + 1, names[_characters[i]]));
-            // 骰子與卡牌/法院亂數從同一個 composition-root seed（_sessionSeed，已於 _Ready 印出）
-            // 固定衍生出兩個不同的子 seed，避免兩個亂數流共用同一個生成器狀態。
+            // ADR-0003 決策5 / docs/AUDIT.md Blocker B1：composition root 在「每次開局」產生一次
+            // 本局 seed（而不是寫死常數，也不是整個 App 生命週期共用一個），並印出來以便重播。
+            // 骰子與卡牌/法院亂數從同一個 seed 固定衍生出兩個不同的子 seed，
+            // 讓兩個亂數流互相獨立，不會因為共用同一個生成器狀態而產生意外相關性。
+            _sessionSeed = (int)GD.Randi();
+            GD.Print("SESSION_SEED=" + _sessionSeed);
             var diceSeed = unchecked(_sessionSeed ^ 0x5DEECE);
             _session = new GameSession(GameModeConfig.ClassicBankruptcyFourPlayer(), PrototypeBoardFactory.Create(), players,
                 new SeededDiceRoller(diceSeed), new SeededRandom(_sessionSeed));
