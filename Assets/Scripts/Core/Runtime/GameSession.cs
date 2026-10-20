@@ -181,12 +181,14 @@ namespace Richman.Core
             {
                 var prisonFrom = player.CurrentTileIndex;
                 var prisonDice = _diceRoller.Roll();
+                Emit(new DiceRolled(player.Id, prisonDice.First, prisonDice.Second, DiceRollPurpose.PrisonEscape));
                 State.LastDiceResult = prisonDice;
                 State.PendingAction = PendingAction.None;
                 State.Phase = TurnPhase.AwaitingEndTurn;
                 if (prisonDice.First == prisonDice.Second)
                 {
                     player.ReleaseFromPrison();
+                    Emit(new PrisonEscapeAttempted(player.Id, true, 0));
                     State.Phase = TurnPhase.AwaitingRoll;
                     State.LastEventMessage = "Doubles released you from prison; move this turn.";
                     State.MovementStepsRemaining = prisonDice.Total;
@@ -197,10 +199,11 @@ namespace Richman.Core
                 }
 
                 player.FailPrisonAttempt();
+                Emit(new PrisonEscapeAttempted(player.Id, false, player.PrisonAttemptsRemaining));
                 if (!player.IsInPrison)
                 {
                     var couldPayBail = player.Money >= 100;
-                    PayToBank(player, 100);
+                    PayToBank(player, 100, MoneyChangeReason.PrisonBail);
                     State.LastEventMessage = couldPayBail
                         ? "Three failed prison attempts; $100 bail paid. You are released."
                         : "Three failed prison attempts; unable to pay $100 bail. Bankruptcy declared.";
@@ -215,6 +218,7 @@ namespace Richman.Core
             if (player.HospitalTurnsRemaining > 0)
             {
                 player.ServeHospitalTurn();
+                Emit(new TurnSkipped(player.Id, TurnSkipReason.Hospital, player.HospitalTurnsRemaining));
                 State.LastDiceResult = null;
                 State.PendingAction = PendingAction.None;
                 State.Phase = TurnPhase.AwaitingEndTurn;
@@ -275,10 +279,23 @@ namespace Richman.Core
 
         private void MoveOneStep(PlayerState player, BoardTileDefinition destination, List<int> path)
         {
+            var from = player.CurrentTileIndex;
             player.MoveTo(destination.PositionIndex);
             State.MovementStepsRemaining--;
             path.Add(destination.PositionIndex);
-            if (destination.PositionIndex == Board.StartPositionIndex) player.AddMoney(Mode.StartBonus);
+            var passedStart = destination.PositionIndex == Board.StartPositionIndex;
+            Emit(new PawnStepped(player.Id, from, destination.PositionIndex, passedStart));
+            if (passedStart)
+            {
+                player.AddMoney(Mode.StartBonus);
+                // 原規則本來就對 StartBonus==0 的棋盤設定無條件呼叫 AddMoney(0)（行為不變）；
+                // 只有金額 > 0 時才發出「領到薪水」事件，避免每次經過起點都產生一筆 0 元雜訊事件。
+                if (Mode.StartBonus > 0)
+                {
+                    Emit(new SalaryCollected(player.Id, Mode.StartBonus));
+                    Emit(new MoneyChanged(player.Id, Mode.StartBonus, player.Money, MoneyChangeReason.Salary));
+                }
+            }
         }
 
         private CommandResult ExecuteBuy(PlayerState player)
@@ -302,6 +319,7 @@ namespace Richman.Core
             }
 
             player.Spend(tile.PurchasePrice);
+            Emit(new MoneyChanged(player.Id, -tile.PurchasePrice, player.Money, MoneyChangeReason.PropertyPurchase));
             property.SetOwner(player.Id);
             Emit(new PropertyPurchased(player.Id, tile.Id, tile.PurchasePrice));
             State.PendingAction = PendingAction.None;
@@ -310,6 +328,7 @@ namespace Richman.Core
             if (Board.GetDistrictPropertyCount(tile.DistrictId) > 1 && OwnsCompleteDistrict(player.Id, tile.DistrictId) && State.TryMarkDistrictRewardPaid(player.Id, tile.DistrictId))
             {
                 player.AddMoney(Mode.CompleteDistrictReward);
+                Emit(new MoneyChanged(player.Id, Mode.CompleteDistrictReward, player.Money, MoneyChangeReason.DistrictReward));
                 State.LastEventMessage += " 集齊區域，獲得旅遊獎勵 $" + Mode.CompleteDistrictReward + "。";
             }
             return CommandResult.Success();
@@ -342,7 +361,9 @@ namespace Richman.Core
             }
 
             player.Spend(tile.UpgradeCost);
+            Emit(new MoneyChanged(player.Id, -tile.UpgradeCost, player.Money, MoneyChangeReason.PropertyUpgrade));
             property.Upgrade();
+            Emit(new PropertyUpgraded(player.Id, tile.Id, property.UpgradeLevel));
             State.CanUpgradeOwnedProperty = false;
             State.PendingAction = PendingAction.None;
             State.Phase = TurnPhase.AwaitingEndTurn;
@@ -399,6 +420,21 @@ namespace Richman.Core
             target.AddMoney(command.OfferedMoney);
             if (offeredProperty != null) offeredProperty.SetOwner(target.Id);
             if (requestedProperty != null) requestedProperty.SetOwner(player.Id);
+            // 注意：四筆金額異動（兩邊的 Spend/AddMoney）在上面已經一次做完（行為不變），
+            // 所以下面 MoneyChanged.NewBalance 反映的是交易「全部完成後」的最終餘額，而不是
+            // 每一步的中繼餘額——兩個方向都有金額時，同一位玩家的兩筆事件會看到同一個
+            // NewBalance。這是刻意的簡化（批次套用、批次回報），不影響 Delta 欄位的正確性。
+            if (command.OfferedMoney > 0)
+            {
+                Emit(new MoneyChanged(player.Id, -command.OfferedMoney, player.Money, MoneyChangeReason.TradeOffered));
+                Emit(new MoneyChanged(target.Id, command.OfferedMoney, target.Money, MoneyChangeReason.TradeReceived));
+            }
+            if (command.RequestedMoney > 0)
+            {
+                Emit(new MoneyChanged(target.Id, -command.RequestedMoney, target.Money, MoneyChangeReason.TradeOffered));
+                Emit(new MoneyChanged(player.Id, command.RequestedMoney, player.Money, MoneyChangeReason.TradeReceived));
+            }
+            Emit(new TradeExecuted(player.Id, target.Id, command.OfferedMoney, command.RequestedMoney, command.OfferedPropertyId, command.RequestedPropertyId));
             State.LastEventMessage = player.DisplayName + " 與 " + target.DisplayName + " 完成交易。";
             return CommandResult.Success();
         }
@@ -416,45 +452,62 @@ namespace Richman.Core
         private void ResolveLanding(PlayerState player, BoardTileDefinition tile)
         {
             State.CanUpgradeOwnedProperty = tile.Type == BoardTileType.Start;
+            Emit(new PawnLanded(player.Id, tile.PositionIndex, tile.Id, tile.Type));
             switch (tile.Type)
             {
                 case BoardTileType.Property:
                     ResolveProperty(player, tile);
                     return;
                 case BoardTileType.Tax:
-                    PayToBank(player, tile.EffectAmount == 0 ? Mode.TaxAmount : Math.Abs(tile.EffectAmount));
+                    PayToBank(player, tile.EffectAmount == 0 ? Mode.TaxAmount : Math.Abs(tile.EffectAmount), MoneyChangeReason.Tax);
                     break;
                 case BoardTileType.Bonus:
-                    player.AddMoney(tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount);
-                    State.LastEventMessage = tile.DisplayName + ": collected $" + (tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount) + ".";
+                {
+                    var bonusAmount = tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount;
+                    player.AddMoney(bonusAmount);
+                    Emit(new MoneyChanged(player.Id, bonusAmount, player.Money, MoneyChangeReason.Bonus));
+                    State.LastEventMessage = tile.DisplayName + ": collected $" + bonusAmount + ".";
                     break;
+                }
                 case BoardTileType.Airport:
                     ResolveAirport(player, tile);
                     break;
                 case BoardTileType.Hospital:
                     player.Hospitalize(tile.EffectAmount > 0 ? tile.EffectAmount : 2);
+                    Emit(new PlayerDetained(player.Id, DetentionKind.Hospital, player.HospitalTurnsRemaining));
                     State.LastEventMessage = "Unexpected admission: " + player.HospitalTurnsRemaining + " full turn(s) in hospital.";
                     break;
                 case BoardTileType.Prison:
                     player.Imprison(3);
+                    Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
                     State.LastEventMessage = "Sent to prison: roll doubles to escape, up to three attempts.";
                     break;
                 case BoardTileType.Court:
+                {
                     var courtDice = _diceRoller.Roll();
+                    Emit(new DiceRolled(player.Id, courtDice.First, courtDice.Second, DiceRollPurpose.CourtJudgment));
                     State.LastCourtDiceResult = courtDice;
                     var courtRoll = courtDice.First + " + " + courtDice.Second + " = " + courtDice.Total;
-                    if (courtDice.Total >= 7) State.LastEventMessage = "Court acquittal: " + courtRoll + ".";
+                    if (courtDice.Total >= 7)
+                    {
+                        State.LastEventMessage = "Court acquittal: " + courtRoll + ".";
+                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Acquittal, 0));
+                    }
                     else if (_random.NextInt(0, 2) == 0)
                     {
                         player.Imprison(3);
+                        Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
                         State.LastEventMessage = "Court judgment: " + courtRoll + "; sent to prison.";
+                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Prison, 0));
                     }
                     else
                     {
-                        PayToBank(player, 100);
+                        PayToBank(player, 100, MoneyChangeReason.CourtFine);
                         State.LastEventMessage = "Court judgment: " + courtRoll + "; paid $100" + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
+                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Fine, 100));
                     }
                     break;
+                }
                 case BoardTileType.Chance:
                     DrawCard(player, _chanceDeck, "chance");
                     break;
@@ -471,7 +524,9 @@ namespace Richman.Core
             var destination = Board.GetTile(airport.AirportDestinationId);
             if (destination == null || destination.Type != BoardTileType.Airport)
                 throw new InvalidOperationException("Airport destination is missing or is not an airport: " + airport.Id + " -> " + airport.AirportDestinationId);
+            var from = player.CurrentTileIndex;
             player.MoveTo(destination.PositionIndex);
+            Emit(new PlayerTeleported(player.Id, from, destination.PositionIndex, TeleportReason.Airport));
             State.LastEventMessage = "機場航線：「" + airport.DisplayName + "」飛往「" + destination.DisplayName + "」。";
         }
 
@@ -480,32 +535,37 @@ namespace Richman.Core
             if (deck == null) throw new InvalidOperationException("A map card deck cannot be empty.");
             var card = deck.Draw(_random);
             State.LastDrawnCard = card;
+            Emit(new CardDrawn(player.Id, card.Id, deckId));
             string effectResult;
 
             switch (card.Effect)
             {
                 case MapCardEffect.ReceiveMoney:
                     player.AddMoney(card.Amount);
+                    Emit(new MoneyChanged(player.Id, card.Amount, player.Money, MoneyChangeReason.CardEffect));
                     effectResult = "Received $" + card.Amount + "; balance is $" + player.Money + ".";
                     break;
                 case MapCardEffect.PayBank:
-                    PayToBank(player, card.Amount);
+                    PayToBank(player, card.Amount, MoneyChangeReason.CardEffect);
                     effectResult = player.Status == PlayerStatus.Bankrupt
                         ? "Could not pay $" + card.Amount + "; bankruptcy declared. Balance is $" + player.Money + "."
                         : "Paid $" + card.Amount + "; balance is $" + player.Money + ".";
                     break;
                 case MapCardEffect.Hospitalize:
                     player.Hospitalize(card.Amount);
+                    Emit(new PlayerDetained(player.Id, DetentionKind.Hospital, player.HospitalTurnsRemaining));
                     effectResult = "Hospital stay set to " + card.Amount + " full turn(s).";
                     break;
                 case MapCardEffect.Imprison:
                     player.Imprison(3);
+                    Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
                     effectResult = "Sent to prison with " + player.PrisonAttemptsRemaining + " escape attempt(s).";
                     break;
                 default:
                     throw new InvalidOperationException("Unsupported map card effect: " + card.Effect);
             }
 
+            Emit(new CardEffectApplied(player.Id, card.Id, card.Effect, card.Amount));
             State.LastEventMessage = deckId.ToUpperInvariant() + " CARD — " + card.Title + ": " + card.Description + " Result: " + effectResult;
         }
 
@@ -530,34 +590,50 @@ namespace Richman.Core
 
             var owner = State.GetPlayer(property.OwnerId.Value);
             if (owner == null || owner.Status != PlayerStatus.Active) throw new InvalidOperationException("A property owner must be active.");
-            var rent = tile.GetRent(property.UpgradeLevel);
+            var baseRent = tile.GetRent(property.UpgradeLevel);
+            var rent = baseRent;
+            var districtBonusAmount = 0;
             if (Board.GetDistrictPropertyCount(tile.DistrictId) > 1 && OwnsCompleteDistrict(owner.Id, tile.DistrictId))
+            {
                 rent = (rent * (100 + Mode.CompleteDistrictRentBonusPercent) + 99) / 100;
+                districtBonusAmount = rent - baseRent;
+            }
             if (player.Money >= rent)
             {
                 player.Spend(rent);
                 owner.AddMoney(rent);
+                Emit(new MoneyChanged(player.Id, -rent, player.Money, MoneyChangeReason.RentPaid));
+                Emit(new MoneyChanged(owner.Id, rent, owner.Money, MoneyChangeReason.RentReceived));
+                Emit(new RentPaid(player.Id, owner.Id, tile.Id, rent, baseRent, districtBonusAmount));
             }
             else
             {
-                owner.AddMoney(player.TakeAllMoney());
-                DeclareBankruptcy(player, owner.Id);
+                var taken = player.TakeAllMoney();
+                owner.AddMoney(taken);
+                if (taken > 0)
+                {
+                    Emit(new MoneyChanged(player.Id, -taken, player.Money, MoneyChangeReason.RentPaid));
+                    Emit(new MoneyChanged(owner.Id, taken, owner.Money, MoneyChangeReason.RentReceived));
+                }
+                DeclareBankruptcy(player, owner.Id, taken);
             }
 
             FinishActionOrAdvance(player);
         }
 
-        private void PayToBank(PlayerState player, int amount)
+        private void PayToBank(PlayerState player, int amount, MoneyChangeReason reason)
         {
             if (amount <= 0) return;
             if (player.Money >= amount)
             {
                 player.Spend(amount);
+                Emit(new MoneyChanged(player.Id, -amount, player.Money, reason));
                 return;
             }
 
-            player.TakeAllMoney();
-            DeclareBankruptcy(player, null);
+            var taken = player.TakeAllMoney();
+            if (taken > 0) Emit(new MoneyChanged(player.Id, -taken, player.Money, reason));
+            DeclareBankruptcy(player, null, taken);
         }
 
         private bool OwnsCompleteDistrict(int playerId, string districtId)
@@ -574,15 +650,21 @@ namespace Richman.Core
             return count > 1;
         }
 
-        private void DeclareBankruptcy(PlayerState player, int? creditorId)
+        private void DeclareBankruptcy(PlayerState player, int? creditorId, int transferredMoney)
         {
             var properties = State.Properties;
+            List<string> transferredPropertyIds = null;
             for (var i = 0; i < properties.Count; i++)
             {
-                if (properties[i].OwnerId == player.Id) properties[i].SetOwner(creditorId);
+                if (properties[i].OwnerId == player.Id)
+                {
+                    (transferredPropertyIds ??= new List<string>()).Add(properties[i].PropertyId);
+                    properties[i].SetOwner(creditorId);
+                }
             }
 
             player.MarkBankrupt();
+            Emit(new PlayerBankrupt(player.Id, creditorId, transferredMoney, transferredPropertyIds?.AsReadOnly()));
             State.PendingAction = PendingAction.None;
             CheckVictory();
         }
@@ -632,6 +714,7 @@ namespace Richman.Core
                     State.TurnNumber++;
                     State.Phase = TurnPhase.AwaitingRoll;
                     State.PendingAction = PendingAction.None;
+                    Emit(new TurnStarted(State.TurnNumber, candidate.Id));
                     return;
                 }
             }
@@ -658,6 +741,7 @@ namespace Richman.Core
             State.Outcome = new GameOutcome(lastActive.Id, State.TurnNumber, VictoryReason.LastPlayerStanding);
             State.Phase = TurnPhase.Finished;
             State.PendingAction = PendingAction.None;
+            Emit(new GameFinished(lastActive.Id, State.TurnNumber, VictoryReason.LastPlayerStanding));
         }
 
         private void FinishByNetWorth()
@@ -689,6 +773,7 @@ namespace Richman.Core
             State.Phase = TurnPhase.Finished;
             State.PendingAction = PendingAction.None;
             State.LastEventMessage = "旅程結算：依現金與資產淨值選出優勝者。";
+            Emit(new GameFinished(winner.Id, State.TurnNumber, VictoryReason.HighestNetWorthAtTurnLimit));
         }
     }
 

@@ -279,11 +279,25 @@ namespace Richman.Core.Events
         public string OptionId { get; }
     }
 
+    // TransferredMoney：破產時實際被沒收的金額（通常是玩家當下的全部現金，可能小於
+    // 名義欠款，因為規則是「拿光現有的、不足就算了」，見 GameSession.PayToBank /
+    // ResolveProperty 的 rent 短缺分支）。CreditorId 為 null 時代表這筆錢直接消失（繳給
+    // 銀行，稅金/罰款/卡牌情境），非 null 時代表這筆錢已經轉給該玩家（租金短缺情境）。
+    // TransferredPropertyIds：破產當下被查封（轉給 CreditorId，或 CreditorId 為 null 時
+    // 歸還銀行）的地產 id 清單，依地產清單原始順序。
     public sealed class PlayerBankrupt : GameEvent
     {
-        public PlayerBankrupt(int playerId, int? creditorId) { PlayerId = playerId; CreditorId = creditorId; }
+        public PlayerBankrupt(int playerId, int? creditorId, int transferredMoney, IReadOnlyList<string> transferredPropertyIds)
+        {
+            PlayerId = playerId;
+            CreditorId = creditorId;
+            TransferredMoney = transferredMoney;
+            TransferredPropertyIds = transferredPropertyIds ?? Array.Empty<string>();
+        }
         public int PlayerId { get; }
         public int? CreditorId { get; }
+        public int TransferredMoney { get; }
+        public IReadOnlyList<string> TransferredPropertyIds { get; }
     }
 
     public sealed class GameFinished : GameEvent
