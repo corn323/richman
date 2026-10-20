@@ -153,6 +153,7 @@ namespace Richman.Core
             else if (command is BuyPropertyCommand) result = ExecuteBuy(player);
             else if (command is UpgradePropertyCommand upgrade) result = ExecuteUpgrade(player, upgrade);
             else if (command is ChooseRouteCommand chooseRoute) result = ExecuteChooseRoute(player, chooseRoute);
+            else if (command is ResolveDecisionCommand resolveDecision) result = ExecuteResolveDecision(player, resolveDecision);
             else if (command is TradeCommand trade) result = ExecuteTrade(player, trade);
             else if (command is EndTurnCommand) result = ExecuteEndTurn(player);
             else result = CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
@@ -248,6 +249,7 @@ namespace Richman.Core
                 if (string.Equals(State.RouteChoiceTileIds[i], command.NextTileId, StringComparison.Ordinal)) legal = true;
             if (!legal) return CommandResult.Failure(CommandErrorCode.InvalidRouteChoice, "The selected route is not connected to this junction.");
 
+            Emit(new DecisionResolved(DecisionKind.ChooseRoute, player.Id, command.NextTileId));
             var from = player.CurrentTileIndex;
             State.SetRouteChoices(null);
             State.PendingAction = PendingAction.None;
@@ -257,6 +259,37 @@ namespace Richman.Core
             ContinueMovement(player, path);
             if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
             return CommandResult.Success(null, from, player.CurrentTileIndex, path.AsReadOnly());
+        }
+
+        // ADR-0003 決策3：ResolveDecisionCommand 的實際解析路徑。刻意不重新實作任何一種
+        // 決策的邏輯，而是把 optionId 轉譯成對應的語法糖命令後，直接呼叫同一個
+        // ExecuteBuy/ExecuteUpgrade/ExecuteChooseRoute——兩種命令因此保證是同一份實作、
+        // 同一組事件，差別只在呼叫端用哪種命令型別表達同一個意圖。
+        // State.PendingDecision 本身是投影（見 GameModel.cs），Phase/PendingAction 在任一時刻
+        // 只會對應到最多一種 DecisionKind，所以「一次只允許一個未決 decision」不需要額外狀態，
+        // 是這個投影設計自動保證的。
+        private CommandResult ExecuteResolveDecision(PlayerState player, ResolveDecisionCommand command)
+        {
+            var turnCheck = ValidateCurrentPlayer(player);
+            if (turnCheck != null) return turnCheck;
+
+            var decision = State.PendingDecision;
+            if (decision == null)
+                return CommandResult.Failure(CommandErrorCode.InvalidPhase, "There is no pending decision to resolve.");
+            if (!decision.ContainsOption(command.OptionId))
+                return CommandResult.Failure(CommandErrorCode.InvalidDecisionOption, "The selected option is not part of the pending decision.");
+
+            switch (decision.Kind)
+            {
+                case DecisionKind.ChooseRoute:
+                    return ExecuteChooseRoute(player, new ChooseRouteCommand(player.Id, command.OptionId));
+                case DecisionKind.BuyProperty:
+                    return ExecuteBuy(player);
+                case DecisionKind.UpgradeProperty:
+                    return ExecuteUpgrade(player, new UpgradePropertyCommand(player.Id, command.OptionId));
+                default:
+                    return CommandResult.Failure(CommandErrorCode.InvalidCommand, "Unsupported decision kind.");
+            }
         }
 
         private void ContinueMovement(PlayerState player, List<int> path)
@@ -270,6 +303,9 @@ namespace Richman.Core
                     State.PendingAction = PendingAction.ChooseRoute;
                     State.Phase = TurnPhase.AwaitingAction;
                     State.LastEventMessage = "請選擇接下來的旅遊路線。";
+                    var optionIds = new string[options.Count];
+                    for (var i = 0; i < options.Count; i++) optionIds[i] = options[i].Id;
+                    Emit(new DecisionRequested(DecisionKind.ChooseRoute, player.Id, optionIds, null));
                     return;
                 }
                 MoveOneStep(player, options[0], path);
@@ -318,6 +354,7 @@ namespace Richman.Core
                 return CommandResult.Failure(CommandErrorCode.InsufficientFunds, "The player cannot afford this property.");
             }
 
+            Emit(new DecisionResolved(DecisionKind.BuyProperty, player.Id, tile.Id));
             player.Spend(tile.PurchasePrice);
             Emit(new MoneyChanged(player.Id, -tile.PurchasePrice, player.Money, MoneyChangeReason.PropertyPurchase));
             property.SetOwner(player.Id);
@@ -340,7 +377,12 @@ namespace Richman.Core
             if (turnCheck != null) return turnCheck;
             var startUpgrade = State.CanUpgradeOwnedProperty &&
                 (State.Phase == TurnPhase.AwaitingAction || State.Phase == TurnPhase.AwaitingEndTurn);
-            if ((State.Phase != TurnPhase.AwaitingAction || State.PendingAction != PendingAction.UpgradeProperty) && !startUpgrade)
+            // ADR-0003 決策3：只有「落地自有地產」觸發的強制 UpgradeProperty 待決才算
+            // PendingDecision；CanUpgradeOwnedProperty 觸發的「停在 Start 可任選一塊自有地產
+            // 升級」是可選動作，不建模為 PendingDecision（見 PendingDecision.cs 的範圍說明），
+            // 所以這裡要在狀態被改掉之前先記住是哪一種，才能正確決定要不要發 DecisionResolved。
+            var isPendingDecision = State.Phase == TurnPhase.AwaitingAction && State.PendingAction == PendingAction.UpgradeProperty;
+            if (!isPendingDecision && !startUpgrade)
             {
                 return CommandResult.Failure(CommandErrorCode.InvalidPhase, "There is no property available to upgrade right now.");
             }
@@ -360,6 +402,7 @@ namespace Richman.Core
                 return CommandResult.Failure(CommandErrorCode.InsufficientFunds, "The player cannot afford this upgrade.");
             }
 
+            if (isPendingDecision) Emit(new DecisionResolved(DecisionKind.UpgradeProperty, player.Id, tile.Id));
             player.Spend(tile.UpgradeCost);
             Emit(new MoneyChanged(player.Id, -tile.UpgradeCost, player.Money, MoneyChangeReason.PropertyUpgrade));
             property.Upgrade();
@@ -578,6 +621,7 @@ namespace Richman.Core
             {
                 State.PendingAction = PendingAction.BuyProperty;
                 State.Phase = TurnPhase.AwaitingAction;
+                Emit(new DecisionRequested(DecisionKind.BuyProperty, player.Id, new[] { tile.Id }, tile.Id));
                 return;
             }
 
@@ -585,6 +629,7 @@ namespace Richman.Core
             {
                 State.PendingAction = PendingAction.UpgradeProperty;
                 State.Phase = TurnPhase.AwaitingAction;
+                Emit(new DecisionRequested(DecisionKind.UpgradeProperty, player.Id, new[] { tile.Id }, tile.Id));
                 return;
             }
 
