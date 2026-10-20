@@ -153,7 +153,10 @@ namespace Richman.Core.Tests
             Assert.That(roll.Succeeded, Is.True);
             Assert.That(roll.ToTileIndex, Is.EqualTo(4));
             Assert.That(session.State.GetPlayer(1).CurrentTileIndex, Is.EqualTo(4));
-            Assert.That(session.State.LastEventMessage, Does.Contain("機場航線"));
+            // T3（去字串化）：改以結構化狀態斷言，確認降落後直接進入待結束回合、無殘留待決動作，
+            // 不再依賴 LastEventMessage 的「機場航線」中文字串。
+            Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingEndTurn));
+            Assert.That(session.State.PendingAction, Is.EqualTo(PendingAction.None));
         }
 
         [TestCase("airport-changi", "airport-incheon")]
@@ -201,7 +204,8 @@ namespace Richman.Core.Tests
             Assert.That(skipped.DiceResult, Is.Null);
             Assert.That(session.State.GetPlayer(1).HospitalTurnsRemaining, Is.EqualTo(1));
             Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingEndTurn));
-            Assert.That(session.State.LastEventMessage, Does.Contain("skipped"));
+            // T3（去字串化）：改以結構化狀態斷言 PendingAction，不再依賴 LastEventMessage 的 "skipped" 字串。
+            Assert.That(session.State.PendingAction, Is.EqualTo(PendingAction.None));
             session.Execute(new EndTurnCommand(1));
             session.Execute(new RollDiceCommand(2));
             session.Execute(new EndTurnCommand(2));
@@ -228,7 +232,9 @@ namespace Richman.Core.Tests
             Assert.That(bail.PathTileIndices, Is.Empty);
             Assert.That(prison.State.GetPlayer(1).PrisonAttemptsRemaining, Is.Zero);
             Assert.That(prison.State.GetPlayer(1).Money, Is.EqualTo(400));
-            Assert.That(prison.State.LastEventMessage, Does.Contain("$100"));
+            // T3（去字串化）：改以結構化狀態斷言（玩家仍為 Active 且扣款金額已在上方驗證），
+            // 不再依賴 LastEventMessage 的 "$100" 字串。
+            Assert.That(prison.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Active));
         }
 
         [Test]
@@ -266,7 +272,9 @@ namespace Richman.Core.Tests
             Assert.That(session.State.CurrentPlayerId, Is.EqualTo(2));
             Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.AwaitingRoll));
             Assert.That(session.State.Outcome, Is.Null);
-            Assert.That(session.State.LastEventMessage, Does.Contain("unable to pay $100"));
+            // T3（去字串化）：改以結構化狀態斷言（破產時嘗試付保釋金必然耗盡逃獄次數），
+            // 不再依賴 LastEventMessage 的 "unable to pay $100" 字串。
+            Assert.That(session.State.GetPlayer(1).PrisonAttemptsRemaining, Is.Zero);
             Assert.That(session.Execute(new EndTurnCommand(1)).ErrorCode, Is.EqualTo(CommandErrorCode.PlayerEliminated));
         }
 
@@ -415,8 +423,10 @@ namespace Richman.Core.Tests
             court.Execute(new RollDiceCommand(1));
             Assert.That(court.State.LastCourtDiceResult.Total, Is.EqualTo(7));
             Assert.That(court.State.GetPlayer(1).Money, Is.EqualTo(500));
-            Assert.That(court.State.LastEventMessage, Does.Contain("acquittal"));
-            Assert.That(court.State.LastEventMessage, Does.Contain("3 + 4 = 7"));
+            // T3（去字串化）：改以結構化狀態斷言（無罰款、未入獄），不再依賴 LastEventMessage
+            // 的 "acquittal" / "3 + 4 = 7" 字串。
+            Assert.That(court.State.GetPlayer(1).PrisonAttemptsRemaining, Is.Zero);
+            Assert.That(court.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Active));
         }
 
         [TestCase(0, true)]
@@ -449,6 +459,9 @@ namespace Richman.Core.Tests
             session.Execute(new RollDiceCommand(1));
 
             Assert.That(session.State.LastDrawnCard, Is.Not.Null);
+            // TODO(Phase1c): 待 GameEvent 後改為事件斷言。目前沒有結構化欄位可以驗證
+            // 「LastEventMessage 是否正確組合了卡牌標題/描述/結果」這件事本身——這正是
+            // LastEventMessage 要被 ADR-0003 的結構化事件取代的原因，Phase 1c 前暫時保留。
             Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Title));
             Assert.That(session.State.LastEventMessage, Does.Contain(session.State.LastDrawnCard.Description));
             Assert.That(session.State.LastEventMessage, Does.Contain("Result:"));
@@ -529,7 +542,9 @@ namespace Richman.Core.Tests
             Assert.That(session.State.GetPlayer(1).Status, Is.EqualTo(PlayerStatus.Bankrupt));
             Assert.That(session.State.GetPlayer(2).Status, Is.EqualTo(PlayerStatus.Winner));
             Assert.That(session.State.Phase, Is.EqualTo(TurnPhase.Finished));
-            Assert.That(session.State.LastEventMessage, Does.Contain("paid $100"));
+            // T3（去字串化）：改以結構化狀態斷言（破產後現金歸零），不再依賴 LastEventMessage
+            // 的 "paid $100" 字串。
+            Assert.That(session.State.GetPlayer(1).Money, Is.Zero);
         }
 
         [Test]

@@ -14,5 +14,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Richman.Core.Standalone.csproj" />
     <Compile Include="GameSessionTests.cs" />
+    <Compile Include="GoldenReplayTests.cs" />
+    <Compile Include="DeterminismTests.cs" />
+    <Compile Include="CharacterizationTests.cs" />
+    <Compile Include="BoardConstraintTests.cs" />
   </ItemGroup>
 </Project>
