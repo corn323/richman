@@ -92,6 +92,13 @@ namespace Richman.Core
             return gameEvent;
         }
 
+        // ADR-0003 決策4：8 階段回合狀態機的事件層敘事（TurnStart→PreRoll→Roll→Move→Land→
+        // ResolveTile→PostAction→TurnEnd）。這些 PhaseChanged 事件只是疊加在既有流程上的
+        // 觀察點，刻意不引入一個真正的狀態機物件去取代現有的 if/else 流程控制——對外
+        // GameState.Phase（AwaitingRoll/AwaitingAction/AwaitingEndTurn/Finished）的值與
+        // 改變時機完全不受影響，黃金雜湊不序列化 TurnStage，所以這裡的新增對它不可見。
+        private void EmitPhase(TurnStage stage) => Emit(new PhaseChanged(stage));
+
         // ADR-0003 決策7：單一合法命令來源，供 HUD／Bot 共用，取代各自重複的
         // 「現在能做什麼」判斷（docs/AUDIT.md Major：GodotGameplayHud.cs:155-181、
         // GameplayHUD.cs:153-165、Bots.cs:19-38）。實際邏輯在 GameState.GetLegalCommands，
@@ -172,6 +179,7 @@ namespace Richman.Core
                 return CommandResult.Failure(CommandErrorCode.InvalidPhase, "The player must finish the current turn before rolling again.");
             }
 
+            EmitPhase(TurnStage.PreRoll);
             State.LastDrawnCard = null;
             State.LastCourtDiceResult = null;
             State.LastEventMessage = string.Empty;
@@ -181,6 +189,7 @@ namespace Richman.Core
             if (player.IsInPrison)
             {
                 var prisonFrom = player.CurrentTileIndex;
+                EmitPhase(TurnStage.Roll);
                 var prisonDice = _diceRoller.Roll();
                 Emit(new DiceRolled(player.Id, prisonDice.First, prisonDice.Second, DiceRollPurpose.PrisonEscape));
                 State.LastDiceResult = prisonDice;
@@ -213,7 +222,7 @@ namespace Richman.Core
                 }
                 else State.LastEventMessage = "Prison escape failed; " + player.PrisonAttemptsRemaining + " attempt(s) remain.";
                 if (State.Phase != TurnPhase.Finished && player.Status == PlayerStatus.Active)
-                    State.Phase = TurnPhase.AwaitingEndTurn;
+                    EnterPostAction();
                 return CommandResult.Success(prisonDice, prisonFrom, player.CurrentTileIndex, Array.Empty<int>());
             }
             if (player.HospitalTurnsRemaining > 0)
@@ -221,12 +230,12 @@ namespace Richman.Core
                 player.ServeHospitalTurn();
                 Emit(new TurnSkipped(player.Id, TurnSkipReason.Hospital, player.HospitalTurnsRemaining));
                 State.LastDiceResult = null;
-                State.PendingAction = PendingAction.None;
-                State.Phase = TurnPhase.AwaitingEndTurn;
+                EnterPostAction();
                 State.LastEventMessage = "Hospital stay: this turn is skipped (" + player.HospitalTurnsRemaining + " turn(s) left).";
                 return CommandResult.Success();
             }
 
+            EmitPhase(TurnStage.Roll);
             var dice = _diceRoller.Roll();
             Emit(new DiceRolled(player.Id, dice.First, dice.Second, DiceRollPurpose.Movement));
             var from = player.CurrentTileIndex;
@@ -294,6 +303,7 @@ namespace Richman.Core
 
         private void ContinueMovement(PlayerState player, List<int> path)
         {
+            EmitPhase(TurnStage.Move);
             while (State.MovementStepsRemaining > 0)
             {
                 var options = Board.GetNextTiles(player.CurrentTileIndex);
@@ -359,8 +369,7 @@ namespace Richman.Core
             Emit(new MoneyChanged(player.Id, -tile.PurchasePrice, player.Money, MoneyChangeReason.PropertyPurchase));
             property.SetOwner(player.Id);
             Emit(new PropertyPurchased(player.Id, tile.Id, tile.PurchasePrice));
-            State.PendingAction = PendingAction.None;
-            State.Phase = TurnPhase.AwaitingEndTurn;
+            EnterPostAction();
             State.LastEventMessage = "已購買「" + tile.DisplayName + "」。";
             if (Board.GetDistrictPropertyCount(tile.DistrictId) > 1 && OwnsCompleteDistrict(player.Id, tile.DistrictId) && State.TryMarkDistrictRewardPaid(player.Id, tile.DistrictId))
             {
@@ -408,8 +417,7 @@ namespace Richman.Core
             property.Upgrade();
             Emit(new PropertyUpgraded(player.Id, tile.Id, property.UpgradeLevel));
             State.CanUpgradeOwnedProperty = false;
-            State.PendingAction = PendingAction.None;
-            State.Phase = TurnPhase.AwaitingEndTurn;
+            EnterPostAction();
             return CommandResult.Success();
         }
 
@@ -495,62 +503,32 @@ namespace Richman.Core
         private void ResolveLanding(PlayerState player, BoardTileDefinition tile)
         {
             State.CanUpgradeOwnedProperty = tile.Type == BoardTileType.Start;
+            EmitPhase(TurnStage.Land);
             Emit(new PawnLanded(player.Id, tile.PositionIndex, tile.Id, tile.Type));
+            EmitPhase(TurnStage.ResolveTile);
             switch (tile.Type)
             {
                 case BoardTileType.Property:
                     ResolveProperty(player, tile);
                     return;
                 case BoardTileType.Tax:
-                    PayToBank(player, tile.EffectAmount == 0 ? Mode.TaxAmount : Math.Abs(tile.EffectAmount), MoneyChangeReason.Tax);
+                    ResolveTax(player, tile);
                     break;
                 case BoardTileType.Bonus:
-                {
-                    var bonusAmount = tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount;
-                    player.AddMoney(bonusAmount);
-                    Emit(new MoneyChanged(player.Id, bonusAmount, player.Money, MoneyChangeReason.Bonus));
-                    State.LastEventMessage = tile.DisplayName + ": collected $" + bonusAmount + ".";
+                    ResolveBonus(player, tile);
                     break;
-                }
                 case BoardTileType.Airport:
                     ResolveAirport(player, tile);
                     break;
                 case BoardTileType.Hospital:
-                    player.Hospitalize(tile.EffectAmount > 0 ? tile.EffectAmount : 2);
-                    Emit(new PlayerDetained(player.Id, DetentionKind.Hospital, player.HospitalTurnsRemaining));
-                    State.LastEventMessage = "Unexpected admission: " + player.HospitalTurnsRemaining + " full turn(s) in hospital.";
+                    ResolveHospital(player, tile);
                     break;
                 case BoardTileType.Prison:
-                    player.Imprison(3);
-                    Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
-                    State.LastEventMessage = "Sent to prison: roll doubles to escape, up to three attempts.";
+                    ResolvePrison(player);
                     break;
                 case BoardTileType.Court:
-                {
-                    var courtDice = _diceRoller.Roll();
-                    Emit(new DiceRolled(player.Id, courtDice.First, courtDice.Second, DiceRollPurpose.CourtJudgment));
-                    State.LastCourtDiceResult = courtDice;
-                    var courtRoll = courtDice.First + " + " + courtDice.Second + " = " + courtDice.Total;
-                    if (courtDice.Total >= 7)
-                    {
-                        State.LastEventMessage = "Court acquittal: " + courtRoll + ".";
-                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Acquittal, 0));
-                    }
-                    else if (_random.NextInt(0, 2) == 0)
-                    {
-                        player.Imprison(3);
-                        Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
-                        State.LastEventMessage = "Court judgment: " + courtRoll + "; sent to prison.";
-                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Prison, 0));
-                    }
-                    else
-                    {
-                        PayToBank(player, 100, MoneyChangeReason.CourtFine);
-                        State.LastEventMessage = "Court judgment: " + courtRoll + "; paid $100" + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
-                        Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Fine, 100));
-                    }
+                    ResolveCourt(player);
                     break;
-                }
                 case BoardTileType.Chance:
                     DrawCard(player, _chanceDeck, "chance");
                     break;
@@ -560,6 +538,59 @@ namespace Richman.Core
             }
 
             FinishActionOrAdvance(player);
+        }
+
+        private void ResolveTax(PlayerState player, BoardTileDefinition tile)
+        {
+            PayToBank(player, tile.EffectAmount == 0 ? Mode.TaxAmount : Math.Abs(tile.EffectAmount), MoneyChangeReason.Tax);
+        }
+
+        private void ResolveBonus(PlayerState player, BoardTileDefinition tile)
+        {
+            var bonusAmount = tile.EffectAmount == 0 ? Mode.BonusAmount : tile.EffectAmount;
+            player.AddMoney(bonusAmount);
+            Emit(new MoneyChanged(player.Id, bonusAmount, player.Money, MoneyChangeReason.Bonus));
+            State.LastEventMessage = tile.DisplayName + ": collected $" + bonusAmount + ".";
+        }
+
+        private void ResolveHospital(PlayerState player, BoardTileDefinition tile)
+        {
+            player.Hospitalize(tile.EffectAmount > 0 ? tile.EffectAmount : 2);
+            Emit(new PlayerDetained(player.Id, DetentionKind.Hospital, player.HospitalTurnsRemaining));
+            State.LastEventMessage = "Unexpected admission: " + player.HospitalTurnsRemaining + " full turn(s) in hospital.";
+        }
+
+        private void ResolvePrison(PlayerState player)
+        {
+            player.Imprison(3);
+            Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
+            State.LastEventMessage = "Sent to prison: roll doubles to escape, up to three attempts.";
+        }
+
+        private void ResolveCourt(PlayerState player)
+        {
+            var courtDice = _diceRoller.Roll();
+            Emit(new DiceRolled(player.Id, courtDice.First, courtDice.Second, DiceRollPurpose.CourtJudgment));
+            State.LastCourtDiceResult = courtDice;
+            var courtRoll = courtDice.First + " + " + courtDice.Second + " = " + courtDice.Total;
+            if (courtDice.Total >= 7)
+            {
+                State.LastEventMessage = "Court acquittal: " + courtRoll + ".";
+                Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Acquittal, 0));
+            }
+            else if (_random.NextInt(0, 2) == 0)
+            {
+                player.Imprison(3);
+                Emit(new PlayerDetained(player.Id, DetentionKind.Prison, player.PrisonAttemptsRemaining));
+                State.LastEventMessage = "Court judgment: " + courtRoll + "; sent to prison.";
+                Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Prison, 0));
+            }
+            else
+            {
+                PayToBank(player, 100, MoneyChangeReason.CourtFine);
+                State.LastEventMessage = "Court judgment: " + courtRoll + "; paid $100" + (player.Status == PlayerStatus.Bankrupt ? "; bankruptcy declared." : " fine.");
+                Emit(new CourtRuled(player.Id, courtDice.Total, CourtRuling.Fine, 100));
+            }
         }
 
         private void ResolveAirport(PlayerState player, BoardTileDefinition airport)
@@ -714,6 +745,17 @@ namespace Richman.Core
             CheckVictory();
         }
 
+        // ADR-0003 決策4：落地格的強制解析（ResolveTile 階段）全部跑完、且玩家仍是 active
+        // 時，進入 PostAction 階段——對外就是 Phase=AwaitingEndTurn，等玩家主動 EndTurn
+        // 或執行選擇性動作（如 CanUpgradeOwnedProperty）。PendingAction 設為 None、
+        // Phase 設為 AwaitingEndTurn 的值與時機完全不變，只是多發一個 PhaseChanged 事件。
+        private void EnterPostAction()
+        {
+            State.PendingAction = PendingAction.None;
+            State.Phase = TurnPhase.AwaitingEndTurn;
+            EmitPhase(TurnStage.PostAction);
+        }
+
         private void FinishActionOrAdvance(PlayerState player)
         {
             if (State.Phase == TurnPhase.Finished) return;
@@ -723,13 +765,13 @@ namespace Richman.Core
                 return;
             }
 
-            State.PendingAction = PendingAction.None;
-            State.Phase = TurnPhase.AwaitingEndTurn;
+            EnterPostAction();
         }
 
         private void AdvanceTurn()
         {
             if (State.Phase == TurnPhase.Finished) return;
+            EmitPhase(TurnStage.TurnEnd);
             Emit(new TurnEnded(State.CurrentPlayerId, State.TurnNumber));
             State.CanUpgradeOwnedProperty = false;
             CheckVictory();
@@ -759,6 +801,7 @@ namespace Richman.Core
                     State.TurnNumber++;
                     State.Phase = TurnPhase.AwaitingRoll;
                     State.PendingAction = PendingAction.None;
+                    EmitPhase(TurnStage.TurnStart);
                     Emit(new TurnStarted(State.TurnNumber, candidate.Id));
                     return;
                 }
