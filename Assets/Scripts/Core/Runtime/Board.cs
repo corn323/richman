@@ -257,10 +257,16 @@ namespace Richman.Core
             // 這裡只對 IsMainRoute=true 的格子套用預設，刻意不管 IsMainRoute=false 的分支格：
             // 分支格的出邊必須自己明確宣告，省略（或刻意傳空陣列）就是測試/地圖作者
             // 想表達「這格沒有出路」，不應該被這個便利預設悄悄蓋過去。
+            //
+            // Phase 1f review 修正（M6）：取模範圍用 _mainRouteTileCount（主環格數），
+            // 不是 _tiles.Count（全部格數）——恢復 Phase 1d-1 之前的舊語意。對「所有格都是
+            // 主環」的棋盤（絕大多數測試/PrototypeBoardFactory 皆如此）兩者數值相同，沒有
+            // 差別；只有「混了非主環分支格」的棋盤才看得出差異，這時候用 _mainRouteTileCount
+            // 才是「這格 i 省略 next 時，想接到下一個主環格」這句話原本要表達的意思。
             for (var i = 0; i < _tiles.Count; i++)
             {
                 if (_tiles[i].IsMainRoute && _tiles[i].NextTileIds.Count == 0)
-                    _tiles[i].SetNextTileIds(new[] { _tiles[(i + 1) % _tiles.Count].Id });
+                    _tiles[i].SetNextTileIds(new[] { _tiles[(i + 1) % _mainRouteTileCount].Id });
             }
             for (var i = 0; i < _tiles.Count; i++)
             {

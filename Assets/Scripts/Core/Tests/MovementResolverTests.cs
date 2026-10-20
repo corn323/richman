@@ -29,8 +29,9 @@ namespace Richman.Core.Tests
             state.MovementStepsRemaining = 3;
             var path = new List<int>();
 
-            resolver.ContinueMovement(player, path);
+            var blocked = resolver.ContinueMovement(player, path);
 
+            Assert.That(blocked, Is.False, "三步應該全部走完，沒有被分岔或封鎖打斷。");
             Assert.That(state.MovementStepsRemaining, Is.EqualTo(0), "三步應該全部走完，沒有被分岔或封鎖打斷。");
             Assert.That(player.CurrentTileIndex, Is.EqualTo(board.GetTile("c").PositionIndex));
             Assert.That(path, Is.EqualTo(new[] { 1, 2, 3 }));
@@ -59,8 +60,9 @@ namespace Richman.Core.Tests
             state.MovementStepsRemaining = 3;
             var path = new List<int>();
 
-            resolver.ContinueMovement(player, path);
+            var pausedForChoice = resolver.ContinueMovement(player, path);
 
+            Assert.That(pausedForChoice, Is.False, "分岔暫停不是「被封鎖」——還有路可走，只是要等玩家選。");
             Assert.That(player.CurrentTileIndex, Is.EqualTo(board.GetTile("fork").PositionIndex),
                 "第一步（start -> fork，唯一出邊）應該直接走掉；第二步在 fork 遇到兩條開啟的邊，暫停等待選擇。");
             Assert.That(state.MovementStepsRemaining, Is.EqualTo(2), "暫停時剩餘步數不應該被消耗。");
@@ -97,14 +99,16 @@ namespace Richman.Core.Tests
             state.MovementStepsRemaining = 2;
             var path = new List<int>();
 
-            resolver.ContinueMovement(player, path);
+            var blocked = resolver.ContinueMovement(player, path);
 
+            Assert.That(blocked, Is.True,
+                "回傳值讓 GameSession 分辨「被封鎖提早結束」跟「步數正常走完」，不能只看 MovementStepsRemaining==0。");
             Assert.That(player.CurrentTileIndex, Is.EqualTo(board.GetTile("blocker").PositionIndex),
                 "第一步 start -> blocker 正常走掉；第二步 blocker 唯一的出邊因條件邊關閉而消失，應停在原地。");
             Assert.That(state.MovementStepsRemaining, Is.EqualTo(0), "被封鎖時剩餘步數直接作廢，不是暫停等待。");
-            var blocked = events.OfType<MovementBlocked>().Single();
-            Assert.That(blocked.PlayerId, Is.EqualTo(player.Id));
-            Assert.That(blocked.TileId, Is.EqualTo("blocker"));
+            var blockedEvent = events.OfType<MovementBlocked>().Single();
+            Assert.That(blockedEvent.PlayerId, Is.EqualTo(player.Id));
+            Assert.That(blockedEvent.TileId, Is.EqualTo("blocker"));
             Assert.That(events.OfType<DecisionRequested>(), Is.Empty);
         }
 

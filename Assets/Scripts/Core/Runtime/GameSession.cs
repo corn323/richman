@@ -234,8 +234,8 @@ namespace Richman.Core
                     State.LastEventMessage = "Doubles released you from prison; move this turn.";
                     State.MovementStepsRemaining = prisonDice.Total;
                     var prisonPath = new List<int>(prisonDice.Total);
-                    _movementResolver.ContinueMovement(player, prisonPath);
-                    if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+                    var prisonBlocked = _movementResolver.ContinueMovement(player, prisonPath);
+                    ResolveMovementOutcome(player, prisonBlocked);
                     return CommandResult.Success(prisonDice, prisonFrom, player.CurrentTileIndex, prisonPath.AsReadOnly());
                 }
 
@@ -273,8 +273,8 @@ namespace Richman.Core
             State.LastDiceResult = dice;
             State.MovementStepsRemaining = dice.Total;
             var path = new List<int>(dice.Total);
-            _movementResolver.ContinueMovement(player, path);
-            if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+            var blocked = _movementResolver.ContinueMovement(player, path);
+            ResolveMovementOutcome(player, blocked);
             return CommandResult.Success(dice, from, player.CurrentTileIndex, path.AsReadOnly());
         }
 
@@ -296,8 +296,8 @@ namespace Richman.Core
             State.LastEventMessage = string.Empty;
             var path = new List<int>(State.MovementStepsRemaining);
             _movementResolver.MoveOneStep(player, Board.GetTile(command.NextTileId), path);
-            _movementResolver.ContinueMovement(player, path);
-            if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
+            var blocked = _movementResolver.ContinueMovement(player, path);
+            ResolveMovementOutcome(player, blocked);
             return CommandResult.Success(null, from, player.CurrentTileIndex, path.AsReadOnly());
         }
 
@@ -549,6 +549,23 @@ namespace Richman.Core
             }
 
             return null;
+        }
+
+        // Phase 1f review 修正（M3，Orchestrator 裁定）：MovementResolver.ContinueMovement
+        // 回傳 true 代表這次移動是被 MovementBlocked 提早結束的（玩家卡在原地，不是正常
+        // 抵達）——這種情況下直接進 PostAction（AwaitingEndTurn 投影），絕對不能對玩家
+        // 卡住的那一格跑 ResolveLanding，否則會對同一格重複觸發稅金/卡片/決策等落地效果。
+        // 只有「步數正常走完」（blocked=false 且 MovementStepsRemaining==0）才是真正的
+        // 抵達，才跑 ResolveLanding；ChooseRoute 暫停（blocked=false 但 remaining>0）兩邊
+        // 都不做，等玩家送出後續命令。
+        private void ResolveMovementOutcome(PlayerState player, bool blocked)
+        {
+            if (blocked)
+            {
+                EnterPostAction();
+                return;
+            }
+            if (State.MovementStepsRemaining == 0) ResolveLanding(player, Board.GetTileAt(player.CurrentTileIndex));
         }
 
         private void ResolveLanding(PlayerState player, BoardTileDefinition tile)

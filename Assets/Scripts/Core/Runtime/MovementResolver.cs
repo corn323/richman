@@ -37,13 +37,21 @@ namespace Richman.Core
 
         // 從玩家目前位置開始，逐格把 MovementStepsRemaining 走完，直到下列其中一種情況
         // 發生而提前返回：
-        //   - 目前格的開啟邊數為 0——發 MovementBlocked，剩餘步數作廢，玩家停在原地；
+        //   - 目前格的開啟邊數為 0——發 MovementBlocked，剩餘步數作廢，玩家停在原地，
+        //     回傳 true（見下方回傳值說明）；
         //   - 目前格的開啟邊數 > 1——發 DecisionRequested(ChooseRoute)，暫停等玩家選擇
         //     （GameSession.ExecuteChooseRoute 之後會呼叫 MoveOneStep 把選到的那格走掉，
-        //     再呼叫這個方法繼續走剩下的步數）。
+        //     再呼叫這個方法繼續走剩下的步數），回傳 false。
         // 步數正常走完（MovementStepsRemaining 歸零）則直接跳出 while 迴圈，不發任何
-        // 額外事件。
-        public void ContinueMovement(PlayerState player, List<int> path)
+        // 額外事件，回傳 false。
+        //
+        // 回傳值（Phase 1f review 修正 M3）：true 代表這次呼叫是因為 MovementBlocked 結束
+        // 的，呼叫端（GameSession）看到 true 時必須直接進 PostAction（EnterPostAction），
+        // 不可以對玩家被卡住的這一格跑 ResolveLanding——被封鎖代表玩家根本沒有「抵達」
+        // 這一格（它是移動半路上走不下去的地方，不是終點），不應該觸發稅金／卡片／
+        // 決策等落地效果。MovementStepsRemaining==0 這個舊的判斷式沒辦法區分「步數正常
+        // 走完」跟「被封鎖提早歸零」，所以需要這個額外的回傳值。
+        public bool ContinueMovement(PlayerState player, List<int> path)
         {
             _emit(new PhaseChanged(TurnStage.Move));
             while (_state.MovementStepsRemaining > 0)
@@ -54,14 +62,12 @@ namespace Richman.Core
                 var options = _board.GetOpenNextTiles(player.CurrentTileIndex, _state.HasBoardFlag);
                 if (options.Count == 0)
                 {
-                    // 這一格現在一條開著的出邊都沒有：玩家停在原地，本次移動剩餘步數作廢，
-                    // 讓呼叫端（ExecuteRoll/ExecuteChooseRoute 的「remaining==0 就 ResolveLanding」
-                    // 分支）照常對這一格跑落地解析——跟步數正常走完時走同一條路徑。
+                    // 這一格現在一條開著的出邊都沒有：玩家停在原地，本次移動剩餘步數作廢。
                     var stuck = _board.GetTileAt(player.CurrentTileIndex);
                     _emit(new MovementBlocked(player.Id, stuck.PositionIndex, stuck.Id));
                     _state.MovementStepsRemaining = 0;
                     _state.SetRouteChoices(null);
-                    return;
+                    return true;
                 }
                 if (options.Count > 1)
                 {
@@ -72,11 +78,12 @@ namespace Richman.Core
                     var optionIds = new string[options.Count];
                     for (var i = 0; i < options.Count; i++) optionIds[i] = options[i].Id;
                     _emit(new DecisionRequested(DecisionKind.ChooseRoute, player.Id, optionIds, null));
-                    return;
+                    return false;
                 }
                 MoveOneStep(player, options[0], path);
             }
             _state.SetRouteChoices(null);
+            return false;
         }
 
         // 把玩家移動到 destination 這一格（單步），消耗一點 MovementStepsRemaining，
