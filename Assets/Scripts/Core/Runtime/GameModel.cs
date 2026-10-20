@@ -291,6 +291,44 @@ namespace Richman.Core
         public IReadOnlyList<string> RouteChoiceTileIds => _routeChoiceTileIdsView;
         public GameOutcome Outcome { get; internal set; }
 
+        // ADR-0003 決策3：PendingDecision 是 PendingAction 的投影（見 PendingDecision.cs header
+        // 註解的範圍說明），每次存取都即時重算，不是額外儲存的狀態。PendingAction 本身保留
+        // 不變，因為黃金雜湊（GoldenReplayTests.cs）直接序列化它。
+        public PendingDecision PendingDecision
+        {
+            get
+            {
+                if (Phase != TurnPhase.AwaitingAction) return null;
+                var currentPlayer = GetPlayer(CurrentPlayerId);
+                if (currentPlayer == null) return null;
+
+                switch (PendingAction)
+                {
+                    case PendingAction.ChooseRoute:
+                        return new PendingDecision(DecisionKind.ChooseRoute, CurrentPlayerId, BuildOptions(RouteChoiceTileIds), null);
+                    case PendingAction.BuyProperty:
+                    {
+                        var tile = Board.GetTileAt(currentPlayer.CurrentTileIndex);
+                        return new PendingDecision(DecisionKind.BuyProperty, CurrentPlayerId, BuildOptions(new[] { tile.Id }), tile.Id);
+                    }
+                    case PendingAction.UpgradeProperty:
+                    {
+                        var tile = Board.GetTileAt(currentPlayer.CurrentTileIndex);
+                        return new PendingDecision(DecisionKind.UpgradeProperty, CurrentPlayerId, BuildOptions(new[] { tile.Id }), tile.Id);
+                    }
+                    default:
+                        return null;
+                }
+            }
+        }
+
+        private static IReadOnlyList<DecisionOption> BuildOptions(IReadOnlyList<string> ids)
+        {
+            var options = new List<DecisionOption>(ids.Count);
+            for (var i = 0; i < ids.Count; i++) options.Add(new DecisionOption(ids[i]));
+            return options.AsReadOnly();
+        }
+
         internal void SetRouteChoices(IReadOnlyList<BoardTileDefinition> tiles)
         {
             _routeChoiceTileIds = new string[tiles == null ? 0 : tiles.Count];

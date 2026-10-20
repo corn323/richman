@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using Richman.Core.Events;
 
 namespace Richman.Core
 {
@@ -25,6 +27,15 @@ namespace Richman.Core
         private readonly IGameRandom _random;
         private readonly CardDeck _chanceDeck;
         private readonly CardDeck _destinyDeck;
+
+        // ADR-0003 決策1：事件骨架。_eventLog 是整個 GameSession 生命週期內的唯讀累積序列
+        // （GameSession.EventLog 對外曝光），_callEvents 是「本次 Execute() 呼叫期間新增了哪些
+        // 事件」的暫存清單，只在 Execute() 執行期間非 null，執行完畢即清空並掛回
+        // CommandResult.Events。兩者裡存的是同一批事件物件參照，不是複製。
+        private readonly List<GameEvent> _eventLog = new List<GameEvent>();
+        private readonly ReadOnlyCollection<GameEvent> _eventLogView;
+        private int _nextEventSequence = 1;
+        private List<GameEvent> _callEvents;
 
         // IRng 強制注入（ADR-0003 決策5 / docs/AUDIT.md Blocker B1）：random 不再有預設值、
         // 不再 fallback 到 Environment.TickCount。呼叫端必須明確決定並記錄 seed 的來源，
@@ -59,11 +70,27 @@ namespace Richman.Core
             }
 
             State = new GameState(mode, board, players, properties);
+            _eventLogView = _eventLog.AsReadOnly();
         }
 
         public GameModeConfig Mode { get; }
         public BoardDefinition Board { get; }
         public GameState State { get; }
+
+        // ADR-0003 決策1/2：全局累積、唯讀的事件序列，供重播/展示層消費。
+        public IReadOnlyList<GameEvent> EventLog => _eventLogView;
+
+        // 蓋上 Sequence（全域單調遞增，貫穿整場對局）與 TurnNumber（事件建立當下的
+        // GameState.TurnNumber 快照），登錄進 _eventLog，並在 Execute() 執行期間同時
+        // 累積進 _callEvents（供本次 CommandResult.Events 使用）。
+        private T Emit<T>(T gameEvent) where T : GameEvent
+        {
+            gameEvent.Sequence = _nextEventSequence++;
+            gameEvent.TurnNumber = State.TurnNumber;
+            _eventLog.Add(gameEvent);
+            _callEvents?.Add(gameEvent);
+            return gameEvent;
+        }
 
         // ADR-0003 決策7：單一合法命令來源，供 HUD／Bot 共用，取代各自重複的
         // 「現在能做什麼」判斷（docs/AUDIT.md Major：GodotGameplayHud.cs:155-181、
@@ -117,13 +144,22 @@ namespace Richman.Core
             var player = State.GetPlayer(command.PlayerId);
             if (player == null) return CommandResult.Failure(CommandErrorCode.PlayerNotFound, "The player does not belong to this session.");
             if (player.Status != PlayerStatus.Active) return CommandResult.Failure(CommandErrorCode.PlayerEliminated, "The player is no longer active.");
-            if (command is RollDiceCommand) return ExecuteRoll(player);
-            if (command is BuyPropertyCommand) return ExecuteBuy(player);
-            if (command is UpgradePropertyCommand upgrade) return ExecuteUpgrade(player, upgrade);
-            if (command is ChooseRouteCommand chooseRoute) return ExecuteChooseRoute(player, chooseRoute);
-            if (command is TradeCommand trade) return ExecuteTrade(player, trade);
-            if (command is EndTurnCommand) return ExecuteEndTurn(player);
-            return CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
+
+            // ADR-0003 決策1：每次 Execute() 呼叫期間暫存本次新增的事件，執行完畢後掛回
+            // CommandResult.Events（只有成功的命令才附帶——驗證失敗時本來就不會有任何事件）。
+            _callEvents = new List<GameEvent>();
+            CommandResult result;
+            if (command is RollDiceCommand) result = ExecuteRoll(player);
+            else if (command is BuyPropertyCommand) result = ExecuteBuy(player);
+            else if (command is UpgradePropertyCommand upgrade) result = ExecuteUpgrade(player, upgrade);
+            else if (command is ChooseRouteCommand chooseRoute) result = ExecuteChooseRoute(player, chooseRoute);
+            else if (command is TradeCommand trade) result = ExecuteTrade(player, trade);
+            else if (command is EndTurnCommand) result = ExecuteEndTurn(player);
+            else result = CommandResult.Failure(CommandErrorCode.InvalidCommand, "The command type is not supported by M1.");
+
+            var callEvents = _callEvents;
+            _callEvents = null;
+            return result.Succeeded ? result.WithEvents(callEvents) : result;
         }
 
         private CommandResult ExecuteRoll(PlayerState player)
@@ -187,6 +223,7 @@ namespace Richman.Core
             }
 
             var dice = _diceRoller.Roll();
+            Emit(new DiceRolled(player.Id, dice.First, dice.Second, DiceRollPurpose.Movement));
             var from = player.CurrentTileIndex;
             State.LastDiceResult = dice;
             State.MovementStepsRemaining = dice.Total;
@@ -266,6 +303,7 @@ namespace Richman.Core
 
             player.Spend(tile.PurchasePrice);
             property.SetOwner(player.Id);
+            Emit(new PropertyPurchased(player.Id, tile.Id, tile.PurchasePrice));
             State.PendingAction = PendingAction.None;
             State.Phase = TurnPhase.AwaitingEndTurn;
             State.LastEventMessage = "已購買「" + tile.DisplayName + "」。";
@@ -565,6 +603,7 @@ namespace Richman.Core
         private void AdvanceTurn()
         {
             if (State.Phase == TurnPhase.Finished) return;
+            Emit(new TurnEnded(State.CurrentPlayerId, State.TurnNumber));
             State.CanUpgradeOwnedProperty = false;
             CheckVictory();
             if (State.Phase == TurnPhase.Finished) return;
