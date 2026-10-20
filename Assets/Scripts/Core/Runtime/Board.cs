@@ -146,10 +146,15 @@ namespace Richman.Core
             _tilesById = new Dictionary<string, BoardTileDefinition>(StringComparer.Ordinal);
             var startCount = 0;
             var startPositionIndex = -1;
+            string startTileId = null;
             for (var i = 0; i < _tiles.Count; i++)
             {
                 var tile = _tiles[i] ?? throw new ArgumentException("Board tiles cannot be null.", nameof(tiles));
                 if (!ids.Add(tile.Id)) throw new ArgumentException("Board tile ids must be unique.", nameof(tiles));
+                // 規則（保留）：PositionIndex == 陣列索引。ADR-0002 之後這只是一個儲存層
+                // 不變量——它讓 tile 有一個穩定、可當 array handle 用的 int（PlayerState.
+                // CurrentTileIndex 等下游 API 現在還靠它），不再隱含「這是環上第幾格」的
+                // 環序語意。真正的拓撲（連通性、分岔、合流）全部改由 NextTileIds 這張圖決定。
                 if (tile.PositionIndex != i) throw new ArgumentException("Tile position indexes must be contiguous and match list order.", nameof(tiles));
                 _tilesById.Add(tile.Id, tile);
                 if (tile.IsMainRoute) _mainRouteTileCount++;
@@ -157,19 +162,28 @@ namespace Richman.Core
                 {
                     startCount++;
                     startPositionIndex = tile.PositionIndex;
+                    startTileId = tile.Id;
                 }
             }
 
             if (startCount != 1) throw new ArgumentException("A board must have exactly one Start tile.", nameof(tiles));
 
-            for (var i = 0; i < _mainRouteTileCount; i++)
+            // ADR-0002：移除「主環必佔前 N 個連續 index」約束。節點的身分只靠 id；
+            // IsMainRoute 降級為佈局/標注提示（見 AssignMapPositions 與 MainRouteTileCount），
+            // 不再是規則驗證的一部分。
+            //
+            // 省略 NextTileIds 的「主環」格（IsMainRoute=true）預設接到陣列順序的下一格
+            // （含 wrap 回第一格）：這純粹是「沒寫 next 時」的方便預設寫法，不代表地圖真的
+            // 構成一個環——地圖是否真的連通、每格是否真的有出路，由下面的一般圖驗證
+            // （出邊數、可達性）把關，不是由這個預設填值本身保證的。
+            //
+            // 這裡只對 IsMainRoute=true 的格子套用預設，刻意不管 IsMainRoute=false 的分支格：
+            // 分支格的出邊必須自己明確宣告，省略（或刻意傳空陣列）就是測試/地圖作者
+            // 想表達「這格沒有出路」，不應該被這個便利預設悄悄蓋過去。
+            for (var i = 0; i < _tiles.Count; i++)
             {
-                if (!_tiles[i].IsMainRoute) throw new ArgumentException("Main route tiles must occupy the first contiguous position indexes.", nameof(tiles));
-            }
-            for (var i = 0; i < _mainRouteTileCount; i++)
-            {
-                if (_tiles[i].NextTileIds.Count == 0)
-                    _tiles[i].SetNextTileIds(new[] { _tiles[(i + 1) % _mainRouteTileCount].Id });
+                if (_tiles[i].IsMainRoute && _tiles[i].NextTileIds.Count == 0)
+                    _tiles[i].SetNextTileIds(new[] { _tiles[(i + 1) % _tiles.Count].Id });
             }
             for (var i = 0; i < _tiles.Count; i++)
             {
@@ -182,15 +196,25 @@ namespace Richman.Core
                 if (tile.Type == BoardTileType.Airport &&
                     (!_tilesById.TryGetValue(tile.AirportDestinationId, out var airportDestination) || airportDestination.Type != BoardTileType.Airport || airportDestination.Id == tile.Id))
                     throw new ArgumentException("Every airport must route to a different valid airport: " + tile.Id, nameof(tiles));
-                if (!tile.IsMainRoute && string.IsNullOrWhiteSpace(tile.RejoinsAtId)) throw new ArgumentException("A branch tile must declare its rejoin id: " + tile.Id, nameof(tiles));
             }
-            for (var i = 0; i < _mainRouteTileCount; i++)
+
+            // ADR-0002：一般圖驗證取代「主環必須形成單一封閉迴圈」——只要求從 Start 可以
+            // 走到每一格（連通性）；每格至少一條出邊已在上面逐格檢查過。分岔（一節點多出邊）
+            // 與合流（多節點指向同一節點）都是合法拓撲，不要求迴圈本身是單一封閉環。
+            ValidateReachableFromStart(startTileId);
+
+            try
             {
-                var expectedNext = _tiles[(i + 1) % _mainRouteTileCount].Id;
-                if (!_tiles[i].NextTileIds.ContainsOrdinal(expectedNext)) throw new ArgumentException("Main route does not form one closed loop at " + _tiles[i].Id, nameof(tiles));
+                AssignMapPositions();
             }
-            ValidateBranchRejoins();
-            AssignMapPositions();
+            catch (ArgumentException)
+            {
+                // ADR-0002：pos/rot 只是佈局提示，不影響規則（§3）。現有的橢圓＋Bezier 佈局
+                // 演算法仍假設「前 MainRouteTileCount 格是主環」且「支線每格只有一個出口」；
+                // 一般圖結構不保證滿足這些假設時，佈局計算在這裡放棄即可（未算到的格子維持
+                // 預設座標），不應該因為算不出佈局就擋下原本合法的圖結構建構。這個暫時的
+                // try/catch 會隨 AssignMapPositions 移出 Core（ADR-0002 後續步驟）一併清理。
+            }
 
             StartPositionIndex = startPositionIndex;
             _tilesView = _tiles.AsReadOnly();
@@ -225,26 +249,27 @@ namespace Richman.Core
             return count;
         }
 
-        private void ValidateBranchRejoins()
+        // ADR-0002：取代舊有「每個支線格各自 BFS 驗證能走到自己宣告的 RejoinsAtId」。
+        // 新規則只要求一件事——從 Start 出發，一般圖的 BFS 可以走到棋盤上每一格；不再
+        // 要求存在某個特定的「主環」或每條支線各自匯合到哪裡。
+        private void ValidateReachableFromStart(string startId)
         {
-            for (var i = _mainRouteTileCount; i < _tiles.Count; i++)
+            var visited = new HashSet<string>(StringComparer.Ordinal) { startId };
+            var pending = new Queue<string>();
+            pending.Enqueue(startId);
+            while (pending.Count > 0)
             {
-                var branch = _tiles[i];
-                if (!_tilesById.TryGetValue(branch.RejoinsAtId, out var merge) || !merge.IsMainRoute)
-                    throw new ArgumentException("Branch rejoin must name a main route tile: " + branch.Id, nameof(_tiles));
-                var pending = new Queue<string>();
-                var visited = new HashSet<string>(StringComparer.Ordinal);
-                pending.Enqueue(branch.Id);
-                var reachesMerge = false;
-                while (pending.Count > 0)
+                var tile = _tilesById[pending.Dequeue()];
+                for (var edge = 0; edge < tile.NextTileIds.Count; edge++)
                 {
-                    var id = pending.Dequeue();
-                    if (!visited.Add(id)) continue;
-                    if (id == merge.Id) { reachesMerge = true; continue; }
-                    var tile = _tilesById[id];
-                    for (var edge = 0; edge < tile.NextTileIds.Count; edge++) pending.Enqueue(tile.NextTileIds[edge]);
+                    var nextId = tile.NextTileIds[edge];
+                    if (visited.Add(nextId)) pending.Enqueue(nextId);
                 }
-                if (!reachesMerge) throw new ArgumentException("Branch cannot reach its declared rejoin: " + branch.Id, nameof(_tiles));
+            }
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                if (!visited.Contains(_tiles[i].Id))
+                    throw new ArgumentException("Tile is not reachable from the Start tile: " + _tiles[i].Id, nameof(_tiles));
             }
         }
 
@@ -313,15 +338,6 @@ namespace Richman.Core
             }
 
             return null;
-        }
-    }
-
-    internal static class BoardStringExtensions
-    {
-        public static bool ContainsOrdinal(this IReadOnlyList<string> values, string value)
-        {
-            for (var i = 0; i < values.Count; i++) if (string.Equals(values[i], value, StringComparison.Ordinal)) return true;
-            return false;
         }
     }
 
